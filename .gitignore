@@ -1,0 +1,40 @@
+# ── Deprecated / Archive ─────────────────────────────────────────────────────
+deprecated/
+
+# ── Environment & Secrets ────────────────────────────────────────────────────
+.env
+.env.*
+*.env
+backend/.env
+
+# ── Python ───────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+dist/
+build/
+venv/
+.venv/
+*.pkl
+
+# ── Node / Frontend ──────────────────────────────────────────────────────────
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+*.tsbuildinfo
+
+# ── IDE ──────────────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# ── Stitch / Gemini ──────────────────────────────────────────────────────────
+.gemini/
+stitch_*/
+retail_scoring_frontend/
+notebooks/
