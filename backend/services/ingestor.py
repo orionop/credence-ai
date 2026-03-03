@@ -85,10 +85,76 @@ def detect_doc_type(filename: str, text: str) -> str:
 
 # ── Specialized Prompts ──────────────────────────────────────────────────────
 
+from services.anomaly_detector import detector
+
+# ── Behavioral Risk Math ───────────────────────────────────────────────────
+
+def derive_behavioral_risk(raw_json: dict) -> dict:
+    """
+    Calculates behavioral fraud indicators locally to avoid LLM math hallucinations.
+    Logic ported and refined from Layout-Aware Parser logic.
+    """
+    features = {}
+    metrics = raw_json.get("gst_behavioral_cash_metrics", {})
+    if not metrics:
+        return {}
+        
+    def safe_div(num, den):
+        try:
+            if num is None or den is None or float(den) == 0:
+                return 0.0
+            return round(float(num) / float(den), 4)
+        except:
+            return 0.0
+
+    gst_declared = metrics.get("gst_declared_supplies", 0)
+    itc_claimed = metrics.get("gst_itc_claimed", 0)
+    itc_utilized = metrics.get("itc_utilized", 0)
+    output_tax = metrics.get("output_tax_liability", 0)
+    cash_paid = metrics.get("cash_tax_paid", 0)
+
+    features["itc_utilization_ratio"] = safe_div(itc_utilized, itc_claimed)
+    features["cash_to_itc_ratio"] = safe_div(cash_paid, itc_utilized)
+    features["cash_tax_ratio"] = safe_div(cash_paid, output_tax)
+    features["output_tax_to_revenue_ratio"] = safe_div(output_tax, gst_declared)
+    features["itc_mismatch_ratio"] = safe_div(metrics.get("gst_itc_variance"), metrics.get("gst_itc_supplier"))
+    features["itc_dependency_ratio"] = safe_div(itc_utilized, output_tax)
+    
+    # Advanced logic: 100% ITC utilization is a major audit flag in India
+    features["flag_100_percent_itc_utilization"] = (features.get("itc_utilization_ratio") >= 0.99)
+    
+    risk_flags = []
+    if features["flag_100_percent_itc_utilization"]:
+        risk_flags.append("CRITICAL: 100% ITC Utilization (Auditor Alert)")
+    if features["cash_tax_ratio"] < 0.05:
+        risk_flags.append("HIGH RISK: Minimal Cash Tax Payout")
+    if features["itc_mismatch_ratio"] > 0.10:
+        risk_flags.append("ITC_RECONCILIATION_VARIANCE_HIGH")
+        
+    features["risk_flags"] = risk_flags
+    
+    # Run Hard Math Anomaly Detection (Isolation Forest)
+    # Uses: Mismatch, Bank-to-GST, and Velocity (approximated here for single doc)
+    anomaly_result = detector.predict(
+        gstr_3b=gst_declared or 0,
+        gstr_2a=metrics.get("gst_itc_supplier") or 0,
+        bank_in=gst_declared * 1.05 if gst_declared else 0, # Placeholder until bank parsing is split
+        bank_out=gst_declared * 0.95 if gst_declared else 0
+    )
+    features["anomaly_detection"] = anomaly_result
+
+    return features
+
+# ── Specialized Prompts ──────────────────────────────────────────────────────
+
 GST_EXTRACTION_PROMPT = """
-You are a senior chartered accountant analyzing a GST Compliance Statement.
+You are an expert Corporate Credit Analyst/CA evaluating Indian GST Compliance documents.
 Extract ALL financial metrics from this document into the EXACT JSON schema below.
-If a value is not found, use null. All monetary values should be in raw numbers (not formatted strings).
+
+CRITICAL AUDIT RULES:
+1. STRONGLY ENFORCE: Convert all formatted numbers (with commas) to raw INR integers (e.g., 21,95,00,000 -> 219500000).
+2. For Output Tax: Extract the CGST, SGST, IGST split exactly. If missing, use null.
+3. If a value is not found, use null.
 
 Return ONLY valid JSON with this exact structure:
 {{
@@ -127,21 +193,6 @@ Return ONLY valid JSON with this exact structure:
       {{"type": "<risk type>", "amount": null}}
     ],
     "legal_litigations": []
-  }},
-  "gst_risk_features": {{
-    "itc_utilization_ratio": null,
-    "refund_approval_ratio": null,
-    "cash_to_itc_ratio": null,
-    "cash_tax_ratio": null,
-    "output_tax_to_revenue_ratio": null,
-    "credit_note_percentage": null,
-    "itc_mismatch_ratio": null,
-    "itc_dependency_ratio": null,
-    "cash_to_gross_tax_ratio": null,
-    "refund_intensity_ratio": null,
-    "document_risk_intensity": null,
-    "flag_100_percent_itc_utilization": false,
-    "risk_flags": []
   }}
 }}
 
@@ -277,7 +328,12 @@ def process_document(filename: str, content: bytes) -> dict:
         # Tag the doc type
         if doc_type == 'GST':
             structured_data["_doc_type"] = "GST"
-            # Also build a simplified financials dict for backward compat
+            
+            # Post-Extraction: Drive Behavioral Risk via Local Math (Superior to LLM Math)
+            risk_features = derive_behavioral_risk(structured_data)
+            structured_data["gst_risk_features"] = risk_features
+            
+            # Build simplified financials dict for backward compat
             gst = structured_data.get("gst_behavioral_cash_metrics", {})
             cf = structured_data.get("company_financials", {})
             structured_data["metadata"] = {"doc_type": "GST Compliance Statement", "pages": None}
@@ -292,8 +348,8 @@ def process_document(filename: str, content: bytes) -> dict:
                 "total_revenue": cf.get("total_revenue"),
             }
             # Build flags from risk features
-            risk = structured_data.get("gst_risk_features", {})
-            structured_data["flags"] = risk.get("risk_flags", [])
+            structured_data["flags"] = risk_features.get("risk_flags", [])
+            
         elif doc_type == 'CIBIL':
             structured_data["_doc_type"] = "CIBIL"
         else:

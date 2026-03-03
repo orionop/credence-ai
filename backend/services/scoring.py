@@ -166,7 +166,8 @@ def compute_five_cs(
     research_insights: list,
     primary_notes: str = "",
     loan_amount: str = "Not Specified",
-    sector: str = "Unknown"
+    sector: str = "Unknown",
+    rich_gst_data: dict = None
 ) -> dict:
     """
     Compute Five Cs scores using LLM analysis + deterministic risk framework.
@@ -180,14 +181,24 @@ def compute_five_cs(
         llm_engine = ChatOpenAI(model="gpt-4-turbo-preview", temperature=0.1).bind(
             response_format={"type": "json_object"}
         )
+        logger.info("Using GPT-4 Turbo for institutional appraisal")
 
         financials_str = json.dumps(financials, indent=2) if financials else "No financials available yet."
         insights_str = "\n".join([
             f"- {i.get('title', i) if isinstance(i, dict) else i}"
             for i in research_insights
         ]) if research_insights else "No research insights available yet."
+        
+        # Add Anomaly Data if available
+        anomaly_str = "No specific anomaly detection run."
+        if rich_gst_data and "gst_risk_features" in rich_gst_data:
+            riskf = rich_gst_data["gst_risk_features"]
+            if "anomaly_detection" in riskf:
+                ad = riskf["anomaly_detection"]
+                anomaly_str = f"Mathematical Anomaly Risk Score: {ad.get('anomaly_risk_score')}% ({ad.get('risk_level')}). Flags: {', '.join(riskf.get('risk_flags', []))}"
 
-        formatted_prompt = SCORING_PROMPT.format(
+        formatted_prompt = SCORING_PROMPT + f"\n\n**Special Mathematical Anomaly Detection Data**:\n{anomaly_str}"
+        formatted_prompt = formatted_prompt.format(
             financials=financials_str,
             insights=insights_str,
             primary_notes=primary_notes if primary_notes else "None provided.",

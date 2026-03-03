@@ -1,5 +1,5 @@
 """
-Persistent session store using SQLite for production-grade reliability.
+Persistent session store using SQLite or PostgreSQL for production-grade reliability.
 Tracks entity data, ingested documents, research results, and CAM state.
 """
 
@@ -14,8 +14,13 @@ from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
-# DB Location - should be in a persistent volume for Railway/Render
-DB_PATH = os.environ.get("DATABASE_PATH", "storage/credence.db")
+# DB Configuration
+DATABASE_URL = os.environ.get("DATABASE_URL")
+if not DATABASE_URL:
+    # Fallback to older env var or default SQLite
+    DATABASE_URL = os.environ.get("DATABASE_PATH", "storage/credence.db")
+
+IS_POSTGRES = DATABASE_URL.startswith("postgres://") or DATABASE_URL.startswith("postgresql://")
 
 @dataclass
 class IngestedDoc:
@@ -60,14 +65,29 @@ class Session:
     updated_at: str = field(default_factory=lambda: datetime.now().isoformat())
 
 def _get_db():
-    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
+    if IS_POSTGRES:
+        import psycopg2
+        from psycopg2.extras import RealDictCursor
+        # Fix for some providers that give postgres:// instead of postgresql://
+        url = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+        conn = psycopg2.connect(url, cursor_factory=RealDictCursor)
+        return conn
+    else:
+        os.makedirs(os.path.dirname(DATABASE_URL), exist_ok=True)
+        conn = sqlite3.connect(DATABASE_URL)
+        conn.row_factory = sqlite3.Row
+        return conn
+
+def _get_placeholder():
+    return "%s" if IS_POSTGRES else "?"
 
 def init_db():
     conn = _get_db()
-    conn.execute("""
+    cursor = conn.cursor()
+    
+    text_type = "TEXT" if not IS_POSTGRES else "TEXT" # Both use TEXT
+    
+    query = f"""
         CREATE TABLE IF NOT EXISTS sessions (
             id TEXT PRIMARY KEY,
             entity_name TEXT,
@@ -90,15 +110,17 @@ def init_db():
             created_at TEXT,
             updated_at TEXT
         )
-    """)
+    """
+    cursor.execute(query)
     conn.commit()
     conn.close()
-    logger.info(f"Initialized SQLite database at {DB_PATH}")
+    logger.info(f"Initialized {'PostgreSQL' if IS_POSTGRES else 'SQLite'} database")
 
 # Call init on module load
 init_db()
 
 def _row_to_session(row) -> Session:
+    # sqlite3.Row or psycopg2 RealDictCursor row behave like dicts
     return Session(
         id=row['id'],
         entity_name=row['entity_name'],
@@ -126,15 +148,17 @@ def create_session(entity_name: str = "", **kwargs) -> Session:
     session_id = str(uuid.uuid4())[:8]
     session = Session(id=session_id, entity_name=entity_name, **kwargs)
     
+    p = _get_placeholder()
     conn = _get_db()
-    conn.execute("""
+    cursor = conn.cursor()
+    cursor.execute(f"""
         INSERT INTO sessions (
             id, entity_name, cin_gstin, sector, facility_type, requested_loan_amount,
             ingested_docs, financials, rich_gst_data, research_insights,
             primary_notes, five_cs_scores, cam_report, credit_score,
             credit_rating, recommendation, recommended_limit,
             probability_of_default, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES ({','.join([p]*20)})
     """, (
         session.id, session.entity_name, session.cin_gstin, session.sector,
         session.facility_type, session.requested_loan_amount,
@@ -159,14 +183,19 @@ def create_session(entity_name: str = "", **kwargs) -> Session:
     return session
 
 def get_session(session_id: str) -> Optional[Session]:
+    p = _get_placeholder()
     conn = _get_db()
-    row = conn.execute("SELECT * FROM sessions WHERE id = ?", (session_id,)).fetchone()
+    cursor = conn.cursor()
+    cursor.execute(f"SELECT * FROM sessions WHERE id = {p}", (session_id,))
+    row = cursor.fetchone()
     conn.close()
     return _row_to_session(row) if row else None
 
 def get_or_create_default_session() -> Session:
     conn = _get_db()
-    row = conn.execute("SELECT * FROM sessions ORDER BY created_at ASC LIMIT 1").fetchone()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM sessions ORDER BY created_at ASC LIMIT 1")
+    row = cursor.fetchone()
     conn.close()
     if row:
         return _row_to_session(row)
@@ -183,16 +212,18 @@ def update_session(session_id: str, **kwargs) -> Optional[Session]:
     
     session.updated_at = datetime.now().isoformat()
     
+    p = _get_placeholder()
     conn = _get_db()
-    conn.execute("""
+    cursor = conn.cursor()
+    cursor.execute(f"""
         UPDATE sessions SET
-            entity_name = ?, cin_gstin = ?, sector = ?, facility_type = ?,
-            requested_loan_amount = ?, ingested_docs = ?, financials = ?,
-            rich_gst_data = ?, research_insights = ?, primary_notes = ?,
-            five_cs_scores = ?, cam_report = ?, credit_score = ?,
-            credit_rating = ?, recommendation = ?, recommended_limit = ?,
-            probability_of_default = ?, updated_at = ?
-        WHERE id = ?
+            entity_name = {p}, cin_gstin = {p}, sector = {p}, facility_type = {p},
+            requested_loan_amount = {p}, ingested_docs = {p}, financials = {p},
+            rich_gst_data = {p}, research_insights = {p}, primary_notes = {p},
+            five_cs_scores = {p}, cam_report = {p}, credit_score = {p},
+            credit_rating = {p}, recommendation = {p}, recommended_limit = {p},
+            probability_of_default = {p}, updated_at = {p}
+        WHERE id = {p}
     """, (
         session.entity_name, session.cin_gstin, session.sector,
         session.facility_type, session.requested_loan_amount,
@@ -217,7 +248,9 @@ def update_session(session_id: str, **kwargs) -> Optional[Session]:
 
 def list_sessions() -> List[Session]:
     conn = _get_db()
-    rows = conn.execute("SELECT * FROM sessions ORDER BY updated_at DESC").fetchall()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM sessions ORDER BY updated_at DESC")
+    rows = cursor.fetchall()
     conn.close()
     return [_row_to_session(row) for row in rows]
 
@@ -253,4 +286,3 @@ def session_to_dict(session: Session) -> dict:
         "created_at": session.created_at,
         "updated_at": session.updated_at,
     }
-

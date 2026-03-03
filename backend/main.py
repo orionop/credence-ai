@@ -267,7 +267,8 @@ async def get_five_cs_scores(session_id: str):
         research_insights=session.research_insights,
         primary_notes=session.primary_notes,
         loan_amount=session.requested_loan_amount,
-        sector=session.sector
+        sector=session.sector,
+        rich_gst_data=session.rich_gst_data
     )
 
     # Persist in session

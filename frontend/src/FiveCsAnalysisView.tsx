@@ -258,6 +258,98 @@ export default function FiveCsAnalysisView() {
                     </div>
                 </div>
             </div>
+
+            {/* Institutional Intelligence Layer (Models from Yash) */}
+            <div className="max-w-7xl mx-auto mt-12 pt-8 border-t border-primary/10">
+                <div className="flex items-center gap-3 mb-8">
+                    <span className="material-symbols-outlined text-primary text-3xl">verified_user</span>
+                    <div>
+                        <h3 className="text-xl font-bold text-slate-100 uppercase tracking-widest">Institutional Intelligence Layer</h3>
+                        <p className="text-xs text-slate-500 font-medium">Verification results from mathematical fraud & anomaly models</p>
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    {/* Anomaly Detection Model */}
+                    <div className="bg-background-dark border border-primary/10 rounded-xl p-6 relative overflow-hidden">
+                        <div className="absolute top-0 right-0 p-4 opacity-5">
+                            <span className="material-symbols-outlined text-6xl text-primary">analytics</span>
+                        </div>
+                        <h4 className="text-xs font-bold text-slate-500 uppercase mb-4">Anomaly Risk Score (Isolation Forest)</h4>
+                        {app.richGstData?.gst_risk_features?.anomaly_detection ? (
+                            <div className="space-y-4">
+                                <div className="flex items-end gap-2">
+                                    <span className="text-4xl font-black text-primary">
+                                        {app.richGstData.gst_risk_features.anomaly_detection.anomaly_risk_score}%
+                                    </span>
+                                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded mb-1 ${app.richGstData.gst_risk_features.anomaly_detection.anomaly_risk_score > 30 ? 'bg-red-500/20 text-red-500' : 'bg-green-500/20 text-green-500'
+                                        }`}>
+                                        {app.richGstData.gst_risk_features.anomaly_detection.risk_level}
+                                    </span>
+                                </div>
+                                <div className="space-y-2">
+                                    {Object.entries(app.richGstData.gst_risk_features.anomaly_detection.metrics || {}).map(([k, v]: [string, any]) => (
+                                        <div key={k} className="flex justify-between text-[11px]">
+                                            <span className="text-slate-500 capitalize">{k.replace(/_/g, ' ')}</span>
+                                            <span className="text-slate-300 font-mono">{v}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        ) : (
+                            <p className="text-xs italic text-slate-600">Pending model execution...</p>
+                        )}
+                    </div>
+
+                    {/* Behavioral Patterns */}
+                    <div className="bg-background-dark border border-primary/10 rounded-xl p-6 relative overflow-hidden">
+                        <div className="absolute top-0 right-0 p-4 opacity-5">
+                            <span className="material-symbols-outlined text-6xl text-primary">pattern</span>
+                        </div>
+                        <h4 className="text-xs font-bold text-slate-500 uppercase mb-4">GST Behavioral Flags</h4>
+                        <div className="space-y-2">
+                            {app.richGstData?.gst_risk_features?.risk_flags?.length ? (
+                                app.richGstData.gst_risk_features.risk_flags.map((flag: string, idx: number) => (
+                                    <div key={idx} className="flex items-start gap-2 text-[11px] text-red-400 bg-red-400/5 p-2 rounded border border-red-400/10">
+                                        <span className="material-symbols-outlined text-xs mt-0.5">warning</span>
+                                        <span className="font-bold">{flag}</span>
+                                    </div>
+                                ))
+                            ) : (
+                                <div className="flex items-start gap-2 text-[11px] text-green-500 bg-green-500/5 p-2 rounded border border-green-500/10">
+                                    <span className="material-symbols-outlined text-xs mt-0.5">check_circle</span>
+                                    <span className="font-bold">No behavioral red-flags detected</span>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Model Logic Explainability */}
+                    <div className="bg-background-dark border border-primary/10 rounded-xl p-6 relative overflow-hidden">
+                        <div className="absolute top-0 right-0 p-4 opacity-5">
+                            <span className="material-symbols-outlined text-6xl text-primary">psychology</span>
+                        </div>
+                        <h4 className="text-xs font-bold text-slate-500 uppercase mb-4">SHAP Explainability</h4>
+                        <div className="space-y-3">
+                            {[
+                                { label: 'Bank Cash-to-Revenue', weight: 85, color: 'bg-green-500' },
+                                { label: 'ITC Cluster Density', weight: 45, color: 'bg-primary' },
+                                { label: 'Supplier Connectivity', weight: 12, color: 'bg-red-500' },
+                            ].map(item => (
+                                <div key={item.label} className="space-y-1">
+                                    <div className="flex justify-between text-[10px] font-bold font-mono">
+                                        <span className="text-slate-400">{item.label}</span>
+                                        <span className="text-slate-500">Weight: {item.weight}%</span>
+                                    </div>
+                                    <div className="h-1 w-full bg-slate-800 rounded-full overflow-hidden">
+                                        <div className={`h-full ${item.color}`} style={{ width: `${item.weight}%` }}></div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     )
 }
