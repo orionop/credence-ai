@@ -100,10 +100,14 @@ llm = ChatOpenAI(model="gpt-3.5-turbo-1106", temperature=0).bind(
 )
 
 SCORING_PROMPT = """
-You are an expert Indian corporate credit analyst at an institutional bank.
+You are an expert Indian corporate credit analyst at an institutional bank (e.g. SBI, HDFC, ICICI).
 Evaluate the following entity using the "Five Cs of Credit" framework.
 
-**Entity Financials (extracted from filings):**
+**Borrower Context**:
+- **Sector**: {sector}
+- **Requested Facility Amount**: {loan_amount}
+
+**Entity Financials (extracted from filings or GST):**
 {financials}
 
 **Secondary Research Insights (web crawl):**
@@ -157,20 +161,26 @@ IMPORTANT: probability_of_default_numeric MUST be a decimal between 0.0 and 1.0
 (e.g. 0.08 for 8% PD). requested_limit_cr should be a number (e.g. 12.5 for ₹12.5 Cr).
 """
 
-
 def compute_five_cs(
     financials: dict,
     research_insights: list,
-    primary_notes: str = ""
+    primary_notes: str = "",
+    loan_amount: str = "Not Specified",
+    sector: str = "Unknown"
 ) -> dict:
     """
     Compute Five Cs scores using LLM analysis + deterministic risk framework.
     Combines AI-generated Five Cs evaluation with deterministic
     PD→tier→sanction pipeline for objective decision logic.
     """
-    logger.info("Computing Five Cs scoring...")
+    logger.info(f"Computing professional-grade Five Cs for loan: {loan_amount}...")
 
     try:
+        # Use GPT-4 for professional-grade analysis in 'Real Product' mode
+        llm_engine = ChatOpenAI(model="gpt-4-turbo-preview", temperature=0.1).bind(
+            response_format={"type": "json_object"}
+        )
+
         financials_str = json.dumps(financials, indent=2) if financials else "No financials available yet."
         insights_str = "\n".join([
             f"- {i.get('title', i) if isinstance(i, dict) else i}"
@@ -180,15 +190,32 @@ def compute_five_cs(
         formatted_prompt = SCORING_PROMPT.format(
             financials=financials_str,
             insights=insights_str,
-            primary_notes=primary_notes if primary_notes else "None provided."
+            primary_notes=primary_notes if primary_notes else "None provided.",
+            loan_amount=loan_amount,
+            sector=sector
         )
 
-        response = llm.invoke([HumanMessage(content=formatted_prompt)])
+        response = llm_engine.invoke([HumanMessage(content=formatted_prompt)])
         scores = json.loads(response.content)
 
         # ── Deterministic Risk Framework ─────────────────────────────────
         pd_numeric = float(scores.get("probability_of_default_numeric", 0.15))
-        requested_cr = float(scores.get("requested_limit_cr", 10.0))
+        
+        # Parse loan amount to numeric if possible (e.g. "₹5,00,00,000" -> 5 Cr)
+        requested_cr = 10.0
+        try:
+            clean_amt = "".join(filter(str.isdigit, loan_amount))
+            if clean_amt:
+                val = float(clean_amt)
+                # 1 Cr = 1,00,00,000. If val is large, convert. 
+                # If val is small (e.g. 50), it might already be in Cr or lakhs.
+                # Heuristic: if > 1000, assume raw INR.
+                if val > 1000:
+                    requested_cr = val / 10_000_000
+                else:
+                    requested_cr = val
+        except:
+            requested_cr = float(scores.get("requested_limit_cr", 10.0))
 
         # Assign risk tier based on PD
         credit_rating, recommendation, risk_premium = assign_risk_tier(pd_numeric)
@@ -220,7 +247,7 @@ def compute_five_cs(
         scores["risk_premium"] = risk_premium
         scores["commercial_score"] = commercial_score  # 300-900 CIBIL-like
 
-        logger.info(f"Five Cs scoring complete. Rating: {credit_rating}, PD: {pd_numeric:.2%}, Score: {overall_score}/100")
+        logger.info(f"Professional scoring complete. Rating: {credit_rating}, PD: {pd_numeric:.2%}, Score: {overall_score}/100")
         return scores
 
     except Exception as e:

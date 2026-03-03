@@ -38,3 +38,9 @@ Thumbs.db
 stitch_*/
 retail_scoring_frontend/
 notebooks/
+
+# ── Local Storage & Databases ────────────────────────────────────────────────
+backend/storage/
+*.db
+*.sqlite
+

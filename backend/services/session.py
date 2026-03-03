@@ -1,16 +1,21 @@
 """
-In-memory session store for the hackathon demo.
+Persistent session store using SQLite for production-grade reliability.
 Tracks entity data, ingested documents, research results, and CAM state.
 """
 
 import uuid
 import logging
+import sqlite3
+import json
+import os
 from dataclasses import dataclass, field
 from typing import Optional, Dict, Any, List
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
+# DB Location - should be in a persistent volume for Railway/Render
+DB_PATH = os.environ.get("DATABASE_PATH", "storage/credence.db")
 
 @dataclass
 class IngestedDoc:
@@ -20,7 +25,6 @@ class IngestedDoc:
     timestamp: str
     extracted_data: Dict[str, Any] = field(default_factory=dict)
     integrity_hash: str = ""
-
 
 @dataclass
 class Session:
@@ -55,51 +59,169 @@ class Session:
     created_at: str = field(default_factory=lambda: datetime.now().isoformat())
     updated_at: str = field(default_factory=lambda: datetime.now().isoformat())
 
+def _get_db():
+    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
 
-# --- In-Memory Store ---
-_sessions: Dict[str, Session] = {}
+def init_db():
+    conn = _get_db()
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS sessions (
+            id TEXT PRIMARY KEY,
+            entity_name TEXT,
+            cin_gstin TEXT,
+            sector TEXT,
+            facility_type TEXT,
+            requested_loan_amount TEXT,
+            ingested_docs TEXT,
+            financials TEXT,
+            rich_gst_data TEXT,
+            research_insights TEXT,
+            primary_notes TEXT,
+            five_cs_scores TEXT,
+            cam_report TEXT,
+            credit_score INTEGER,
+            credit_rating TEXT,
+            recommendation TEXT,
+            recommended_limit TEXT,
+            probability_of_default TEXT,
+            created_at TEXT,
+            updated_at TEXT
+        )
+    """)
+    conn.commit()
+    conn.close()
+    logger.info(f"Initialized SQLite database at {DB_PATH}")
 
+# Call init on module load
+init_db()
+
+def _row_to_session(row) -> Session:
+    return Session(
+        id=row['id'],
+        entity_name=row['entity_name'],
+        cin_gstin=row['cin_gstin'],
+        sector=row['sector'],
+        facility_type=row['facility_type'],
+        requested_loan_amount=row['requested_loan_amount'],
+        ingested_docs=[IngestedDoc(**d) for d in json.loads(row['ingested_docs'])],
+        financials=json.loads(row['financials']),
+        rich_gst_data=json.loads(row['rich_gst_data']),
+        research_insights=json.loads(row['research_insights']),
+        primary_notes=row['primary_notes'],
+        five_cs_scores=json.loads(row['five_cs_scores']),
+        cam_report=row['cam_report'],
+        credit_score=row['credit_score'],
+        credit_rating=row['credit_rating'],
+        recommendation=row['recommendation'],
+        recommended_limit=row['recommended_limit'],
+        probability_of_default=row['probability_of_default'],
+        created_at=row['created_at'],
+        updated_at=row['updated_at']
+    )
 
 def create_session(entity_name: str = "", **kwargs) -> Session:
-    """Create a new session and return it."""
     session_id = str(uuid.uuid4())[:8]
     session = Session(id=session_id, entity_name=entity_name, **kwargs)
-    _sessions[session_id] = session
-    logger.info(f"Created session {session_id} for entity '{entity_name}'")
+    
+    conn = _get_db()
+    conn.execute("""
+        INSERT INTO sessions (
+            id, entity_name, cin_gstin, sector, facility_type, requested_loan_amount,
+            ingested_docs, financials, rich_gst_data, research_insights,
+            primary_notes, five_cs_scores, cam_report, credit_score,
+            credit_rating, recommendation, recommended_limit,
+            probability_of_default, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (
+        session.id, session.entity_name, session.cin_gstin, session.sector,
+        session.facility_type, session.requested_loan_amount,
+        json.dumps([vars(d) for d in session.ingested_docs]),
+        json.dumps(session.financials),
+        json.dumps(session.rich_gst_data),
+        json.dumps(session.research_insights),
+        session.primary_notes,
+        json.dumps(session.five_cs_scores),
+        session.cam_report,
+        session.credit_score,
+        session.credit_rating,
+        session.recommendation,
+        session.recommended_limit,
+        session.probability_of_default,
+        session.created_at,
+        session.updated_at
+    ))
+    conn.commit()
+    conn.close()
+    logger.info(f"Created persistent session {session_id}")
     return session
 
-
 def get_session(session_id: str) -> Optional[Session]:
-    """Retrieve a session by ID."""
-    return _sessions.get(session_id)
-
+    conn = _get_db()
+    row = conn.execute("SELECT * FROM sessions WHERE id = ?", (session_id,)).fetchone()
+    conn.close()
+    return _row_to_session(row) if row else None
 
 def get_or_create_default_session() -> Session:
-    """Get the first session or create a default one."""
-    if _sessions:
-        return next(iter(_sessions.values()))
+    conn = _get_db()
+    row = conn.execute("SELECT * FROM sessions ORDER BY created_at ASC LIMIT 1").fetchone()
+    conn.close()
+    if row:
+        return _row_to_session(row)
     return create_session(entity_name="Demo Entity")
 
-
 def update_session(session_id: str, **kwargs) -> Optional[Session]:
-    """Update fields on a session."""
-    session = _sessions.get(session_id)
+    session = get_session(session_id)
     if not session:
         return None
+    
     for key, value in kwargs.items():
         if hasattr(session, key):
             setattr(session, key, value)
+    
     session.updated_at = datetime.now().isoformat()
+    
+    conn = _get_db()
+    conn.execute("""
+        UPDATE sessions SET
+            entity_name = ?, cin_gstin = ?, sector = ?, facility_type = ?,
+            requested_loan_amount = ?, ingested_docs = ?, financials = ?,
+            rich_gst_data = ?, research_insights = ?, primary_notes = ?,
+            five_cs_scores = ?, cam_report = ?, credit_score = ?,
+            credit_rating = ?, recommendation = ?, recommended_limit = ?,
+            probability_of_default = ?, updated_at = ?
+        WHERE id = ?
+    """, (
+        session.entity_name, session.cin_gstin, session.sector,
+        session.facility_type, session.requested_loan_amount,
+        json.dumps([vars(d) for d in session.ingested_docs]),
+        json.dumps(session.financials),
+        json.dumps(session.rich_gst_data),
+        json.dumps(session.research_insights),
+        session.primary_notes,
+        json.dumps(session.five_cs_scores),
+        session.cam_report,
+        session.credit_score,
+        session.credit_rating,
+        session.recommendation,
+        session.recommended_limit,
+        session.probability_of_default,
+        session.updated_at,
+        session.id
+    ))
+    conn.commit()
+    conn.close()
     return session
 
-
 def list_sessions() -> List[Session]:
-    """List all sessions."""
-    return list(_sessions.values())
-
+    conn = _get_db()
+    rows = conn.execute("SELECT * FROM sessions ORDER BY updated_at DESC").fetchall()
+    conn.close()
+    return [_row_to_session(row) for row in rows]
 
 def session_to_dict(session: Session) -> dict:
-    """Convert session to a JSON-serializable dict."""
     return {
         "id": session.id,
         "entity_name": session.entity_name,
@@ -131,3 +253,4 @@ def session_to_dict(session: Session) -> dict:
         "created_at": session.created_at,
         "updated_at": session.updated_at,
     }
+

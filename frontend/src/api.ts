@@ -3,7 +3,9 @@
  * All backend communication goes through these typed helpers.
  */
 
-const API_BASE = "http://localhost:8080/api/v1"
+// In Vite, env variables are prefixed with VITE_
+const BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8080"
+const API_BASE = `${BASE_URL}/api/v1`
 
 // ── Types ─────────────────────────────────────────────────────────────────
 

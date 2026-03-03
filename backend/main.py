@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from services.ingestor import process_document
 from services.agent import research_entity
 from services.cam_generator import generate_cam
+import os
 from services.session import (
     create_session, get_session, get_or_create_default_session,
     update_session, list_sessions, session_to_dict, IngestedDoc
@@ -25,9 +26,10 @@ app = FastAPI(
 )
 
 # CORS setup
+allowed_origins = os.environ.get("ALLOWED_ORIGINS", "*").split(",")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -263,17 +265,21 @@ async def get_five_cs_scores(session_id: str):
     scores = compute_five_cs(
         financials=session.financials,
         research_insights=session.research_insights,
-        primary_notes=session.primary_notes
+        primary_notes=session.primary_notes,
+        loan_amount=session.requested_loan_amount,
+        sector=session.sector
     )
 
     # Persist in session
-    session.five_cs_scores = scores
-    session.credit_score = scores.get("overall_score", 0)
-    session.credit_rating = scores.get("credit_rating", "")
-    session.recommendation = scores.get("recommendation", "")
-    session.recommended_limit = scores.get("recommended_limit", "")
-    session.probability_of_default = scores.get("probability_of_default", "")
-    session.updated_at = datetime.now().isoformat()
+    update_session(
+        session.id,
+        five_cs_scores=scores,
+        credit_score=scores.get("overall_score", 0),
+        credit_rating=scores.get("credit_rating", ""),
+        recommendation=scores.get("recommendation", ""),
+        recommended_limit=scores.get("recommended_limit", ""),
+        probability_of_default=scores.get("probability_of_default", "")
+    )
 
     return {
         "status": "success",
@@ -291,19 +297,33 @@ async def create_cam(request: CAMGenerationRequest):
     the final Credit Appraisal Memo (CAM).
     """
     try:
+        loan_amount = "Not Specified"
+        sector = "Unknown"
+        rich_gst_data = None
+        
+        # Priority: Pull richer context from session if ID exists
+        if request.session_id:
+            session = get_session(request.session_id)
+            if session:
+                loan_amount = session.requested_loan_amount or loan_amount
+                sector = session.sector or sector
+                rich_gst_data = session.rich_gst_data
+
         cam_report = generate_cam(
-            request.company_name,
-            request.parsed_financials,
-            request.research_insights,
-            request.primary_insights
+            company_name=request.company_name,
+            financials=request.parsed_financials,
+            insights=request.research_insights,
+            primary_insights=request.primary_insights,
+            loan_amount=loan_amount,
+            sector=sector,
+            rich_gst_data=rich_gst_data
         )
 
         # Update session if provided
         if request.session_id:
             session = get_session(request.session_id)
             if session:
-                session.cam_report = cam_report
-                session.updated_at = datetime.now().isoformat()
+                update_session(session.id, cam_report=cam_report)
 
         return {
             "status": "success",

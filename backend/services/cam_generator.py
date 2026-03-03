@@ -15,43 +15,72 @@ logger = logging.getLogger(__name__)
 llm = ChatOpenAI(model="gpt-4-turbo-preview", temperature=0.2)
 
 CAM_PROMPT = """
-You are an expert Credit Manager at a top-tier Indian Corporate Bank.
+You are an expert Credit Manager at a top-tier Indian Corporate Bank (e.g., HDFC, ICICI, Kotak).
 Your task is to generate a comprehensive Credit Appraisal Memo (CAM) for the entity "{company_name}".
 
-You are provided with:
-1. Structured Financials (extracted from filings):
+**Context**:
+- **Requested Loan Amount**: {loan_amount}
+- **Sector**: {sector}
+
+**Inputs for Analysis**:
+1. **Financial Highlights (Structured)**:
 {financials}
 
-2. Secondary Research Insights (web crawl data):
+2. **GST Behavioral & Integrity Metrics**:
+{gst_data}
+
+3. **Secondary Market Research (Autonomous Agent Results)**:
 {insights}
 
-3. Primary Field Insights (qualitative notes from due diligence):
+4. **Primary Field Observations (Credit Officer Notes)**:
 {primary_insights}
 
-Generate a professional Markdown report structured with the "Five Cs of Credit" (Character, Capacity, Capital, Collateral, and Conditions).
-At the end, provide a definitive "Final Recommendation":
-- Suggest whether to lend or reject.
-- Explain the transparent logic behind this decision based on the provided inputs (especially flagging any litigation or related-party risks).
-- If lending, suggest a risk-adjusted framework (e.g. "Approved with 2% risk premium due to X").
+**Report Requirements**:
+1. Use professional Indian banking terminology.
+2. Structure the report using the "Five Cs of Credit":
+   - **Character**: Evaluation of promoters, litigation risk, and integrity flags.
+   - **Capacity**: Analysis of cash flows, debt serviceability, and GST tax-to-revenue ratios.
+   - **Capital**: Net worth assessment and leverage.
+   - **Collateral**: Proposed security and asset coverage.
+   - **Conditions**: Macro/sector headwinds vs. entity positioning.
+3. **Specific Analysis**:
+   - Compare "Declared GST Turnover" vs "Audited Revenue" if variance is provided.
+   - Flag any ITC Mismatch or high ITC Dependency.
+4. **Final Recommendation**:
+   - **Sanction Status**: Approved/Rejected/Conditional.
+   - **Sanction Amount**: Recommend an amount based on the {loan_amount} requested.
+   - **Pricing**: Risk-adjusted interest rate (e.g., 1-year MCLR + 250 bps).
+   - **Covenants**: Specific financial or non-financial conditions (e.g., DSCR > 1.2x).
 
-Keep the tone highly professional, objective, and analytical. Use bullet points and bold text where appropriate.
+Tone: Highly objective, data-driven, and authoritative.
 """
 
-def generate_cam(company_name: str, financials: dict, insights: list, primary_insights: str = "") -> str:
+def generate_cam(
+    company_name: str, 
+    financials: dict, 
+    insights: list, 
+    primary_insights: str = "",
+    loan_amount: str = "Not Specified",
+    sector: str = "Unknown",
+    rich_gst_data: dict = None
+) -> str:
     """
-    Real implementation of the final Credit Appraisal Memo generator using LLM.
-    Synthesizes structured numbers, agent insights, and primary feedback.
+    Synthesizes all gathered intelligence into a high-stakes appraisal memo.
     """
-    logger.info(f"Generating CAM for {company_name}")
+    logger.info(f"Generating professional CAM for {company_name}")
     
     try:
         financials_str = json.dumps(financials, indent=2)
+        gst_str = json.dumps(rich_gst_data, indent=2) if rich_gst_data else "No rich GST behavioral data available."
         insights_str = "\n".join([f"- {i}" for i in insights])
         
         prompt = PromptTemplate.from_template(CAM_PROMPT)
         formatted_prompt = prompt.format(
             company_name=company_name,
+            loan_amount=loan_amount,
+            sector=sector,
             financials=financials_str,
+            gst_data=gst_str,
             insights=insights_str,
             primary_insights=primary_insights if primary_insights else "None provided."
         )
@@ -61,16 +90,5 @@ def generate_cam(company_name: str, financials: dict, insights: list, primary_in
         
     except Exception as e:
         logger.error(f"Error generating CAM: {e}")
-        
-        # Fallback
-        date_str = datetime.now().strftime("%Y-%m-%d")
-        return f"""# Credit Appraisal Memo (CAM)
-**Entity:** {company_name}
-**Date:** {date_str}
+        return f"# Credit Appraisal Memo (CAM) - {company_name}\n\nError generating advanced report: {str(e)}"
 
-## Error Generating Advanced CAM
-An error occurred while connecting to the AI models: {str(e)}
-
-### Interim Financials
-{financials}
-"""
