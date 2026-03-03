@@ -41,6 +41,7 @@ class EntityRequest(BaseModel):
     cin_gstin: Optional[str] = ""
     sector: Optional[str] = "Manufacturing & Heavy Industries"
     facility_type: Optional[str] = "Term Loan"
+    requested_loan_amount: Optional[str] = ""
     session_id: Optional[str] = None  # If updating existing session
 
 class EntityResearchRequest(BaseModel):
@@ -81,7 +82,8 @@ async def save_entity(request: EntityRequest):
                     entity_name=request.entity_name,
                     cin_gstin=request.cin_gstin,
                     sector=request.sector,
-                    facility_type=request.facility_type
+                    facility_type=request.facility_type,
+                    requested_loan_amount=request.requested_loan_amount
                 )
                 return {"status": "updated", "session": session_to_dict(session)}
 
@@ -90,7 +92,8 @@ async def save_entity(request: EntityRequest):
             entity_name=request.entity_name,
             cin_gstin=request.cin_gstin,
             sector=request.sector,
-            facility_type=request.facility_type
+            facility_type=request.facility_type,
+            requested_loan_amount=request.requested_loan_amount
         )
         return {"status": "created", "session": session_to_dict(session)}
 
@@ -161,6 +164,14 @@ async def ingest_document(
                     session.financials.update(extracted_data["financials"])
                 if "flags" in extracted_data:
                     session.financials.setdefault("flags", []).extend(extracted_data["flags"])
+
+                # Store rich GST data if this is a GST document
+                if extracted_data.get("_doc_type") == "GST":
+                    session.rich_gst_data = {
+                        k: v for k, v in extracted_data.items()
+                        if k in ('company_financials', 'gst_behavioral_cash_metrics',
+                                 'document_risks', 'gst_risk_features')
+                    }
 
                 session.updated_at = datetime.now().isoformat()
 

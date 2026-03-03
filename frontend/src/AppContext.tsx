@@ -16,11 +16,13 @@ interface AppState {
     cinGstin: string
     sector: string
     facilityType: string
+    requestedLoanAmount: string
 
     // Ingested documents
     ingestedDocs: api.IngestedDoc[]
     financials: Record<string, any>
     latestExtraction: ExtractedData | null
+    richGstData: Record<string, any>
 
     // Research
     researchInsights: ResearchInsight[]
@@ -49,7 +51,7 @@ interface AppState {
 
 interface AppActions {
     // Entity
-    saveEntity: (name: string, cin: string, sector: string, facility: string) => Promise<void>
+    saveEntity: (name: string, cin: string, sector: string, facility: string, loanAmount: string) => Promise<void>
 
     // Ingest
     ingestDocument: (file: File) => Promise<ExtractedData | null>
@@ -86,9 +88,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const [cinGstin, setCinGstin] = useState('')
     const [sector, setSector] = useState('Manufacturing & Heavy Industries')
     const [facilityType, setFacilityType] = useState('Term Loan')
+    const [requestedLoanAmount, setRequestedLoanAmount] = useState('')
     const [ingestedDocs, setIngestedDocs] = useState<api.IngestedDoc[]>([])
     const [financials, setFinancials] = useState<Record<string, any>>({})
     const [latestExtraction, setLatestExtraction] = useState<ExtractedData | null>(null)
+    const [richGstData, setRichGstData] = useState<Record<string, any>>({})
     const [researchInsights, setResearchInsights] = useState<ResearchInsight[]>([])
     const [primaryNotes, setPrimaryNotes] = useState('')
     const [fiveCsScores, setFiveCsScores] = useState<FiveCsResult | null>(null)
@@ -122,8 +126,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setCinGstin(s.cin_gstin)
         setSector(s.sector)
         setFacilityType(s.facility_type)
+        setRequestedLoanAmount(s.requested_loan_amount || '')
         setIngestedDocs(s.ingested_docs)
         setFinancials(s.financials)
+        if (s.rich_gst_data && Object.keys(s.rich_gst_data).length > 0) {
+            setRichGstData(s.rich_gst_data)
+        }
         setResearchInsights(s.research_insights)
         setPrimaryNotes(s.primary_notes)
         if (s.five_cs_scores && 'overall_score' in s.five_cs_scores) {
@@ -139,10 +147,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     // ── Actions ─────────────────────────────────────────────────────────────
 
-    const saveEntity = useCallback(async (name: string, cin: string, sec: string, fac: string) => {
+    const saveEntity = useCallback(async (name: string, cin: string, sec: string, fac: string, loanAmt: string) => {
         setLoadingFor('entity', true)
         try {
-            const res = await api.saveEntity(name, cin, sec, fac, sessionId || undefined)
+            const res = await api.saveEntity(name, cin, sec, fac, loanAmt, sessionId || undefined)
             hydrateFromSession(res.session)
             toast(`Entity "${name}" saved — session ${res.session.id}`)
         } catch (e: any) {
@@ -254,8 +262,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // ── Value ───────────────────────────────────────────────────────────────
 
     const value: AppContextType = {
-        sessionId, entityName, cinGstin, sector, facilityType,
-        ingestedDocs, financials, latestExtraction,
+        sessionId, entityName, cinGstin, sector, facilityType, requestedLoanAmount,
+        ingestedDocs, financials, latestExtraction, richGstData,
         researchInsights, primaryNotes,
         fiveCsScores, camReport,
         creditScore, creditRating, recommendation, recommendedLimit, probabilityOfDefault,

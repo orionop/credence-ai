@@ -1,13 +1,13 @@
 """
 Five Cs Scoring Engine for Corporate Credit.
 Uses GPT for Five Cs evaluation + deterministic risk tier assignment
-adapted from BharatScore's PD-based tier/score framework.
+based on PD-driven tier/score framework.
 
-Key patterns integrated from BharatScore:
-- Risk tier bins (A+ to D) based on Probability of Default
-- PD → alt-CIBIL score conversion (logit transform to 300-900 scale)
+Key features:
+- Risk tier bins (AAA to B/CCC) based on Probability of Default
+- PD → CIBIL-scale score conversion (logit transform to 300-900 scale)
 - Sanction percentage by risk tier
-- SHAP-style feature explanation format
+- Explainable score decomposition
 """
 
 import logging
@@ -21,7 +21,7 @@ load_dotenv()
 
 logger = logging.getLogger(__name__)
 
-# ── Risk Tier Framework (adapted from BharatScore) ──────────────────────────
+# ── Risk Tier Framework ─────────────────────────────────────────────────────
 
 CORPORATE_RISK_TIERS = [
     (0.00, 0.02, "AAA",  "approved",    "0.75%"),
@@ -63,7 +63,7 @@ FEATURE_EXPLANATIONS = {
 
 def pd_to_corporate_score(pd_value: float, scale_min: int = 300, scale_max: int = 900) -> float:
     """Convert Probability of Default to a CIBIL-like commercial score (300-900).
-    Uses logit transform similar to BharatScore's pd_to_alt_cibil."""
+    Uses logit transform to convert PD to a CIBIL-scale score."""
     p = np.clip(pd_value, 1e-6, 1 - 1e-6)
     x = -np.log(p / (1 - p))
     x_norm = np.clip((x - (-6)) / (6 - (-6)), 0, 1)
@@ -78,7 +78,7 @@ def score_to_normalized(score: float, scale_min: int = 300, scale_max: int = 900
 
 def assign_risk_tier(pd_value: float) -> tuple:
     """Assign corporate rating, recommendation, and risk premium based on PD.
-    Adapted from BharatScore's pd_to_tier function."""
+    Maps PD to a standardized risk tier."""
     for lo, hi, rating, rec, premium in CORPORATE_RISK_TIERS:
         if lo <= pd_value < hi:
             return rating, rec, premium
@@ -87,7 +87,7 @@ def assign_risk_tier(pd_value: float) -> tuple:
 
 def compute_sanction_limit(requested_cr: float, rating: str) -> str:
     """Compute recommended credit limit based on risk tier.
-    Adapted from BharatScore's sanction_amount logic."""
+    Determines facility sanction percentage based on risk tier."""
     pct = SANCTION_PCT_BY_RATING.get(rating, 0.0)
     limit = requested_cr * pct
     return f"₹{limit:.2f} Cr"
@@ -165,7 +165,7 @@ def compute_five_cs(
 ) -> dict:
     """
     Compute Five Cs scores using LLM analysis + deterministic risk framework.
-    Combines AI-generated Five Cs evaluation with BharatScore-style
+    Combines AI-generated Five Cs evaluation with deterministic
     PD→tier→sanction pipeline for objective decision logic.
     """
     logger.info("Computing Five Cs scoring...")
@@ -186,7 +186,7 @@ def compute_five_cs(
         response = llm.invoke([HumanMessage(content=formatted_prompt)])
         scores = json.loads(response.content)
 
-        # ── Deterministic Risk Framework (from BharatScore patterns) ─────
+        # ── Deterministic Risk Framework ─────────────────────────────────
         pd_numeric = float(scores.get("probability_of_default_numeric", 0.15))
         requested_cr = float(scores.get("requested_limit_cr", 10.0))
 

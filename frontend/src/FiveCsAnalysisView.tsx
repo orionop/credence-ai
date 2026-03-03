@@ -28,7 +28,7 @@ function axisEndpoint(i: number, n: number, cx = 200, cy = 200, r = 150): [numbe
     return [cx + r * Math.cos(angle), cy + r * Math.sin(angle)]
 }
 
-function labelPos(i: number, n: number, cx = 200, cy = 200, r = 175): { x: number; y: number; anchor: string } {
+function labelPos(i: number, n: number, cx = 200, cy = 200, r = 175): { x: number; y: number; anchor: 'start' | 'middle' | 'end' } {
     const angle = (Math.PI * 2 * i) / n - Math.PI / 2
     const x = cx + r * Math.cos(angle)
     const y = cy + r * Math.sin(angle)

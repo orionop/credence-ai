@@ -53,8 +53,10 @@ export interface SessionData {
     cin_gstin: string
     sector: string
     facility_type: string
+    requested_loan_amount: string
     ingested_docs: IngestedDoc[]
     financials: Record<string, any>
+    rich_gst_data: Record<string, any>
     research_insights: ResearchInsight[]
     primary_notes: string
     five_cs_scores: FiveCsResult | Record<string, never>
@@ -83,6 +85,7 @@ export async function saveEntity(
     cinGstin: string,
     sector: string,
     facilityType: string,
+    requestedLoanAmount: string,
     sessionId?: string
 ): Promise<{ status: string; session: SessionData }> {
     const res = await fetch(`${API_BASE}/entity`, {
@@ -93,6 +96,7 @@ export async function saveEntity(
             cin_gstin: cinGstin,
             sector: sector,
             facility_type: facilityType,
+            requested_loan_amount: requestedLoanAmount,
             session_id: sessionId,
         }),
     })

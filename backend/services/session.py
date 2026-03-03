@@ -30,10 +30,13 @@ class Session:
     cin_gstin: str = ""
     sector: str = "Manufacturing & Heavy Industries"
     facility_type: str = "Term Loan"
+    requested_loan_amount: str = ""
     # Ingested documents
     ingested_docs: List[IngestedDoc] = field(default_factory=list)
     # Aggregated financials from all ingested docs
     financials: Dict[str, Any] = field(default_factory=dict)
+    # Rich GST data (full schema from Gemini extraction)
+    rich_gst_data: Dict[str, Any] = field(default_factory=dict)
     # Research agent results
     research_insights: List[Dict[str, str]] = field(default_factory=list)
     # Primary/qualitative notes from the credit officer
@@ -103,6 +106,7 @@ def session_to_dict(session: Session) -> dict:
         "cin_gstin": session.cin_gstin,
         "sector": session.sector,
         "facility_type": session.facility_type,
+        "requested_loan_amount": session.requested_loan_amount,
         "ingested_docs": [
             {
                 "filename": d.filename,
@@ -114,6 +118,7 @@ def session_to_dict(session: Session) -> dict:
             for d in session.ingested_docs
         ],
         "financials": session.financials,
+        "rich_gst_data": session.rich_gst_data,
         "research_insights": session.research_insights,
         "primary_notes": session.primary_notes,
         "five_cs_scores": session.five_cs_scores,

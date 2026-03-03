@@ -14,11 +14,12 @@ export default function EntityIngestionView() {
     const [localCin, setLocalCin] = useState(app.cinGstin || '')
     const [localSector, setLocalSector] = useState(app.sector || 'Manufacturing & Heavy Industries')
     const [localFacility, setLocalFacility] = useState(app.facilityType || 'Term Loan')
+    const [localLoanAmount, setLocalLoanAmount] = useState(app.requestedLoanAmount || '')
     const [activeTab, setActiveTab] = useState<'gst' | 'bank' | 'annual'>('gst')
     const fileInputRef = useRef<HTMLInputElement>(null)
 
     const handleSaveEntity = async () => {
-        await app.saveEntity(localName, localCin, localSector, localFacility)
+        await app.saveEntity(localName, localCin, localSector, localFacility, localLoanAmount)
     }
 
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -200,6 +201,18 @@ export default function EntityIngestionView() {
                                         <option>Project Finance</option>
                                         <option>Bank Guarantee</option>
                                     </select>
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-1 gap-6">
+                                <div className="space-y-2">
+                                    <label className="text-xs font-bold text-slate-400 uppercase tracking-tighter">Requested Loan Amount (INR)</label>
+                                    <input
+                                        value={localLoanAmount}
+                                        onChange={e => setLocalLoanAmount(e.target.value)}
+                                        className="w-full bg-slate-50 dark:bg-background-dark border border-primary/10 rounded-lg py-3 px-4 text-sm focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all"
+                                        placeholder="e.g. 50,00,00,000"
+                                        type="text"
+                                    />
                                 </div>
                             </div>
                             <div className="pt-4 flex justify-end">

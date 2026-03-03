@@ -621,15 +621,64 @@ function AppraisalMemoView() {
 /* ─────────────────────────────────────────────────────────────────────────── */
 function GSTReconciliationView() {
     const app = useApp()
-    const hasRealData = Object.keys(app.financials).length > 0 && app.financials.revenue_yoy_growth !== undefined
+    const gst = app.richGstData?.gst_behavioral_cash_metrics || {}
+    const risk = app.richGstData?.gst_risk_features || {}
+    const risks = app.richGstData?.document_risks?.document_risk_mentions || []
+    const hasGstData = Object.keys(gst).length > 0
 
-    const transactions = [
-        { entity: app.entityName || 'Apex Logistics Pvt Ltd', gstin: app.cinGstin || '27AABCA1234F1Z5', gstSales: '₹8,45,20,000', bankCredit: '₹2,10,00,000', variance: '-75.15%', varianceColor: 'rose', icon: 'report', iconColor: 'rose', highlight: false },
-        { entity: 'Stellar Infrastructure', gstin: '07AQWPM9901L2ZA', gstSales: '₹4,12,00,000', bankCredit: '₹4,12,05,000', variance: '+0.01%', varianceColor: 'emerald', icon: 'cycle', iconColor: 'amber', highlight: true },
-        { entity: 'Blue Horizon Imports', gstin: '29MMNNB1231D1X9', gstSales: '₹1,80,00,000', bankCredit: '₹1,78,50,000', variance: '-0.83%', varianceColor: 'slate', icon: 'check_circle', iconColor: 'slate', highlight: false },
-        { entity: 'Zenith Tech Solutions', gstin: '19KKLJJ8811K3Z0', gstSales: '₹5,90,00,000', bankCredit: '₹0', variance: '-100%', varianceColor: 'rose', icon: 'error', iconColor: 'rose', highlight: false },
-        { entity: 'Orbit Trading Co.', gstin: '33FFGGG4455H1Z3', gstSales: '₹2,45,00,000', bankCredit: '₹2,45,00,000', variance: '0.00%', varianceColor: 'emerald', icon: 'autorenew', iconColor: 'amber', highlight: false },
-    ]
+    const fmt = (v: any) => {
+        if (v == null) return '—'
+        const n = Number(v)
+        if (isNaN(n)) return String(v)
+        return '₹' + n.toLocaleString('en-IN')
+    }
+    const pct = (v: any) => v != null ? (Number(v) * 100).toFixed(2) + '%' : '—'
+
+    // Build transactions from real extracted data
+    const transactions = hasGstData ? [
+        {
+            label: 'Declared Taxable Supplies (GSTR-1/3B)',
+            value: fmt(gst.gst_declared_supplies),
+            compareLabel: 'Domestic Supplies',
+            compareValue: fmt(gst.domestic_supplies),
+            variance: gst.domestic_supplies && gst.gst_declared_supplies
+                ? (((gst.domestic_supplies - gst.gst_declared_supplies) / gst.gst_declared_supplies) * 100).toFixed(2) + '%'
+                : '—',
+            flag: false,
+        },
+        {
+            label: 'ITC Claimed (Availed)',
+            value: fmt(gst.gst_itc_claimed),
+            compareLabel: 'ITC per Suppliers (GSTR-2A)',
+            compareValue: fmt(gst.gst_itc_supplier),
+            variance: gst.gst_itc_variance ? fmt(gst.gst_itc_variance) + ' gap' : '—',
+            flag: (risk.itc_mismatch_ratio || 0) > 0.02,
+        },
+        {
+            label: 'Output Tax Liability',
+            value: fmt(gst.output_tax_liability),
+            compareLabel: 'Cash Tax Actually Paid',
+            compareValue: fmt(gst.cash_tax_paid),
+            variance: pct(risk.cash_tax_ratio),
+            flag: (risk.cash_tax_ratio || 1) < 0.3,
+        },
+        {
+            label: 'Export Supplies (Zero-Rated)',
+            value: fmt(gst.export_supplies),
+            compareLabel: 'Refund Claimed',
+            compareValue: fmt(gst.refund_claimed),
+            variance: gst.pending_refunds ? fmt(gst.pending_refunds) + ' pending' : '—',
+            flag: (risk.refund_intensity_ratio || 0) > 0.03,
+        },
+        {
+            label: 'Reverse Charge (Freight)',
+            value: fmt(gst.reverse_charge_freight),
+            compareLabel: 'Reverse Charge (Legal)',
+            compareValue: fmt(gst.reverse_charge_legal),
+            variance: '—',
+            flag: false,
+        },
+    ] : []
 
     return (
         <div className="flex flex-col flex-1 overflow-hidden">
@@ -648,7 +697,7 @@ function GSTReconciliationView() {
                     </div>
                     <div>
                         <h2 className="text-lg font-bold">GST vs Bank Reconciliation</h2>
-                        <p className="text-xs text-slate-500">{app.entityName || 'No Entity'} • {app.ingestedDocs.length} documents • {app.financials.flags?.length || 0} flags</p>
+                        <p className="text-xs text-slate-500">{app.entityName || 'No Entity'} • {app.ingestedDocs.length} documents • {risk.risk_flags?.length || 0} risk flags</p>
                     </div>
                 </div>
                 <div className="flex gap-2">
@@ -672,90 +721,106 @@ function GSTReconciliationView() {
                 <main className="flex-1 overflow-hidden flex flex-col bg-background-light dark:bg-background-dark">
                     {/* Summary Cards */}
                     <div className="p-6 flex flex-wrap gap-4 border-b border-primary/20">
-                        <div className="flex-1 min-w-[220px] bg-primary/5 border border-primary/10 p-5 rounded-xl">
-                            <p className="text-sm text-primary/60 font-medium">Revenue Integrity Score</p>
-                            <h3 className="text-3xl font-black mt-1">{app.creditScore || '—'}/100</h3>
+                        <div className="flex-1 min-w-[200px] bg-primary/5 border border-primary/10 p-5 rounded-xl">
+                            <p className="text-sm text-primary/60 font-medium">GST Declared Turnover</p>
+                            <h3 className="text-2xl font-black mt-1">{fmt(gst.gst_declared_supplies)}</h3>
+                            <p className="text-[10px] text-slate-500 mt-1">FY 2024-25</p>
                         </div>
-                        <div className="flex-1 min-w-[220px] bg-primary/5 border border-primary/10 p-5 rounded-xl">
-                            <p className="text-sm text-primary/60 font-medium">Documents Ingested</p>
-                            <h3 className="text-3xl font-black mt-1">{app.ingestedDocs.length}</h3>
-                            <div className="mt-4"><span className="text-[10px] font-bold py-0.5 px-2 bg-primary/10 text-primary rounded border border-primary/20">
-                                {hasRealData ? 'Verified' : 'Awaiting Data'}
-                            </span></div>
+                        <div className="flex-1 min-w-[200px] bg-primary/5 border border-primary/10 p-5 rounded-xl">
+                            <p className="text-sm text-primary/60 font-medium">ITC Claimed</p>
+                            <h3 className="text-2xl font-black mt-1">{fmt(gst.gst_itc_claimed)}</h3>
+                            <p className="text-[10px] text-slate-500 mt-1">Dependency: {pct(risk.itc_dependency_ratio)}</p>
                         </div>
-                        <div className="flex-1 min-w-[220px] bg-primary/5 border border-primary/10 p-5 rounded-xl">
-                            <p className="text-sm text-primary/60 font-medium">Flagged Items</p>
-                            <h3 className="text-3xl font-black mt-1">{app.financials.flags?.length || 0}</h3>
-                            <p className="text-xs text-rose-500 flex items-center gap-1 mt-2">
-                                {app.financials.flags?.length > 0 ? 'Requires Review' : 'Clean'}
-                            </p>
+                        <div className="flex-1 min-w-[200px] bg-primary/5 border border-primary/10 p-5 rounded-xl">
+                            <p className="text-sm text-primary/60 font-medium">Cash Tax Paid</p>
+                            <h3 className="text-2xl font-black mt-1">{fmt(gst.cash_tax_paid)}</h3>
+                            <p className="text-[10px] text-slate-500 mt-1">Ratio: {pct(risk.cash_tax_ratio)}</p>
+                        </div>
+                        <div className="flex-1 min-w-[200px] bg-primary/5 border border-primary/10 p-5 rounded-xl">
+                            <p className="text-sm text-primary/60 font-medium">ITC Variance</p>
+                            <h3 className={`text-2xl font-black mt-1 ${gst.gst_itc_variance > 0 ? 'text-amber-500' : ''}`}>{fmt(gst.gst_itc_variance)}</h3>
+                            <p className="text-[10px] text-slate-500 mt-1">Mismatch: {pct(risk.itc_mismatch_ratio)}</p>
                         </div>
                     </div>
 
                     {/* Table */}
                     <div className="flex-1 overflow-hidden flex flex-col p-6">
-                        <h2 className="text-xl font-bold mb-6">Transaction Reconciliation Ledger</h2>
+                        <h2 className="text-xl font-bold mb-6">GST Reconciliation Ledger</h2>
                         <div className="flex-1 overflow-auto border border-primary/20 rounded-xl bg-white dark:bg-background-dark/20">
                             <table className="w-full text-left border-collapse min-w-[900px]">
                                 <thead className="sticky top-0 bg-background-dark z-20 shadow-sm">
                                     <tr>
-                                        <th className="p-4 text-[10px] uppercase font-bold text-primary/50 tracking-widest border-b border-primary/20">Entity / Vendor</th>
-                                        <th className="p-4 text-[10px] uppercase font-bold text-primary/50 tracking-widest border-b border-primary/20">GSTR-1/3B Sales</th>
-                                        <th className="p-4 text-[10px] uppercase font-bold text-primary/50 tracking-widest border-b border-primary/20">Bank Credit (Actual)</th>
-                                        <th className="p-4 text-[10px] uppercase font-bold text-primary/50 tracking-widest border-b border-primary/20">Variance %</th>
-                                        <th className="p-4 text-[10px] uppercase font-bold text-primary/50 tracking-widest border-b border-primary/20 text-center">AI Flag</th>
+                                        <th className="p-4 text-[10px] uppercase font-bold text-primary/50 tracking-widest border-b border-primary/20">Metric</th>
+                                        <th className="p-4 text-[10px] uppercase font-bold text-primary/50 tracking-widest border-b border-primary/20">Declared / Filed</th>
+                                        <th className="p-4 text-[10px] uppercase font-bold text-primary/50 tracking-widest border-b border-primary/20">Counter / Actual</th>
+                                        <th className="p-4 text-[10px] uppercase font-bold text-primary/50 tracking-widest border-b border-primary/20">Variance</th>
+                                        <th className="p-4 text-[10px] uppercase font-bold text-primary/50 tracking-widest border-b border-primary/20 text-center">Flag</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-primary/10">
-                                    {transactions.map((tx) => (
-                                        <tr key={tx.entity} className={`group hover:bg-primary/5 transition-colors ${tx.highlight ? 'bg-rose-500/5' : ''}`}>
-                                            <td className="p-4">
-                                                <div className="flex flex-col">
-                                                    <span className="text-sm font-bold">{tx.entity}</span>
-                                                    <span className="text-[10px] text-primary/40">GSTIN: {tx.gstin}</span>
-                                                </div>
-                                            </td>
-                                            <td className="p-4 text-sm font-medium">{tx.gstSales}</td>
-                                            <td className="p-4 text-sm font-medium">{tx.bankCredit}</td>
-                                            <td className="p-4">
-                                                <span className={`text-sm font-black ${tx.varianceColor === 'rose' ? 'text-rose-500' : tx.varianceColor === 'emerald' ? 'text-emerald-500' : 'text-slate-500'}`}>{tx.variance}</span>
-                                            </td>
-                                            <td className="p-4 text-center">
-                                                <span className={`material-symbols-outlined ${tx.iconColor === 'rose' ? 'text-rose-500' : tx.iconColor === 'amber' ? 'text-amber-500' : 'text-slate-500'}`}>{tx.icon}</span>
-                                            </td>
-                                        </tr>
-                                    ))}
+                                    {transactions.length === 0 ? (
+                                        <tr><td colSpan={5} className="px-6 py-12 text-center text-slate-500 italic">Upload GST Compliance Statement to populate this ledger.</td></tr>
+                                    ) : (
+                                        transactions.map((tx, i) => (
+                                            <tr key={i} className={`group hover:bg-primary/5 transition-colors ${tx.flag ? 'bg-amber-500/5' : ''}`}>
+                                                <td className="p-4">
+                                                    <div className="flex flex-col">
+                                                        <span className="text-sm font-bold">{tx.label}</span>
+                                                        <span className="text-[10px] text-primary/40">{tx.compareLabel}</span>
+                                                    </div>
+                                                </td>
+                                                <td className="p-4 text-sm font-medium">{tx.value}</td>
+                                                <td className="p-4 text-sm font-medium">{tx.compareValue}</td>
+                                                <td className="p-4">
+                                                    <span className={`text-sm font-black ${tx.flag ? 'text-amber-500' : 'text-slate-500'}`}>{tx.variance}</span>
+                                                </td>
+                                                <td className="p-4 text-center">
+                                                    {tx.flag && <span className="material-symbols-outlined text-amber-500">warning</span>}
+                                                </td>
+                                            </tr>
+                                        ))
+                                    )}
                                 </tbody>
                             </table>
                         </div>
                     </div>
                 </main>
 
-                {/* Right Panel: Anomaly Inspector */}
+                {/* Right Panel: Risk Exposure Inspector */}
                 <aside className="w-80 border-l border-primary/20 flex flex-col bg-primary/5 shrink-0">
                     <div className="p-6 border-b border-primary/20">
-                        <h3 className="text-sm font-bold uppercase tracking-wider text-primary/60 mb-1">AI Inspector</h3>
-                        <p className="text-lg font-bold">Anomaly Details</p>
+                        <h3 className="text-sm font-bold uppercase tracking-wider text-primary/60 mb-1">Risk Exposure</h3>
+                        <p className="text-lg font-bold">Document Risks</p>
                     </div>
 
-                    {/* Network Graph Mini */}
-                    <div className="p-4 border-b border-primary/20">
-                        <p className="text-xs font-bold text-primary uppercase tracking-widest mb-3">Circular Loop Detection</p>
-                        <div className="w-full h-40 border border-primary/20 rounded-xl bg-background-dark/80 relative overflow-hidden">
-                            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-32 h-32">
-                                <svg className="w-full h-full" viewBox="0 0 100 100">
-                                    <circle className="animate-pulse" cx="50" cy="20" fill="#c5a981" r="5" />
-                                    <circle cx="80" cy="70" fill="#c5a981" r="5" />
-                                    <circle cx="20" cy="70" fill="#c5a981" r="5" />
-                                    <path className="opacity-40" d="M50 20 L80 70 L20 70 Z" fill="none" stroke="#c5a981" strokeDasharray="4" strokeWidth="0.5" />
-                                </svg>
+                    {/* Risk Flags */}
+                    {risk.risk_flags?.length > 0 && (
+                        <div className="p-4 border-b border-primary/20">
+                            <p className="text-xs font-bold text-primary uppercase tracking-widest mb-3">AI Risk Flags</p>
+                            <div className="space-y-2">
+                                {risk.risk_flags.map((f: string, i: number) => (
+                                    <div key={i} className="px-3 py-2 bg-amber-500/10 border border-amber-500/20 rounded-lg text-xs font-bold text-amber-500">
+                                        {f}
+                                    </div>
+                                ))}
                             </div>
                         </div>
-                    </div>
+                    )}
 
                     <div className="flex-1 overflow-auto p-4 custom-scrollbar">
                         <div className="space-y-4">
-                            {app.financials.flags?.length > 0 ? (
+                            {risks.length > 0 ? (
+                                risks.map((r: any, i: number) => (
+                                    <div key={i} className="p-4 rounded-lg bg-amber-500/10 border border-amber-500/20">
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <span className="material-symbols-outlined text-amber-500 text-[20px]">warning_amber</span>
+                                            <span className="text-xs font-bold text-amber-500 uppercase tracking-tight">Risk Exposure</span>
+                                        </div>
+                                        <p className="text-sm font-bold mb-1">{r.type}</p>
+                                        <p className="text-lg font-black text-amber-500">{r.amount != null ? fmt(r.amount) : '—'}</p>
+                                    </div>
+                                ))
+                            ) : app.financials.flags?.length > 0 ? (
                                 app.financials.flags.map((flag: string, i: number) => (
                                     <div key={i} className="p-4 rounded-lg bg-amber-500/10 border border-amber-500/20">
                                         <div className="flex items-center gap-2 mb-2">
@@ -763,13 +828,13 @@ function GSTReconciliationView() {
                                             <span className="text-xs font-bold text-amber-500 uppercase tracking-tight">AI Flag</span>
                                         </div>
                                         <p className="text-sm font-bold mb-1">{flag}</p>
-                                        <p className="text-[11px] text-slate-400 leading-normal">Detected during document ingestion. Review recommended.</p>
+                                        <p className="text-[11px] text-slate-400 leading-normal">Detected during document ingestion.</p>
                                     </div>
                                 ))
                             ) : (
                                 <div className="p-4 rounded-lg bg-primary/5 border border-primary/10 text-center">
                                     <span className="material-symbols-outlined text-primary text-2xl mb-2">search</span>
-                                    <p className="text-xs text-slate-500">Upload GST and Bank Statement data to enable anomaly detection.</p>
+                                    <p className="text-xs text-slate-500">Upload GST data to enable risk exposure analysis.</p>
                                 </div>
                             )}
                         </div>

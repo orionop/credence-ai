@@ -13,8 +13,9 @@ pandas==2.2.0
 # AI/LLM for Research Agent & CAM Gen
 langchain==0.1.7
 langchain-openai==0.0.6
+langchain-google-genai>=1.0.0
 openai==1.12.0
 tavily-python==0.3.2
 
-# Scoring Engine (from BharatScore patterns)
+# Scoring Engine
 numpy

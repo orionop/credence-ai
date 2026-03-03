@@ -22,8 +22,8 @@ Built for the "Intelli-Credit" hackathon challenge: *Next-Gen Corporate Credit A
 │                                                          │
 │  ┌─────────────┐  ┌──────────────┐  ┌────────────────┐  │
 │  │  Ingestor   │  │ Research     │  │ Scoring Engine │  │
-│  │  (PyMuPDF + │  │ Agent        │  │ (Five Cs +     │  │
-│  │   GPT-3.5)  │  │ (Tavily API) │  │  Risk Tiers)   │  │
+│  │  (Gemini +  │  │ Agent        │  │ (Five Cs +     │  │
+│  │   PyMuPDF)  │  │ (Tavily API) │  │  Risk Tiers)   │  │
 │  └─────────────┘  └──────────────┘  └────────────────┘  │
 │  ┌─────────────┐  ┌──────────────┐  ┌────────────────┐  │
 │  │  Session    │  │ CAM          │  │ PD → Score     │  │
@@ -32,6 +32,28 @@ Built for the "Intelli-Credit" hackathon challenge: *Next-Gen Corporate Credit A
 │  └─────────────┘  └──────────────┘  └────────────────┘  │
 └─────────────────────────────────────────────────────────┘
 ```
+
+---
+
+## Supported Inputs
+
+| Category | Document Types |
+|----------|---------------|
+| **Structured Data** | GSTR-1 / 2A / 3B, Bank Statements, ITRs |
+| **Unstructured Data** | Annual Reports, Board Minutes, Rating Agency Reports, Sanction Letters, Legal Notices |
+| **Direct UI Inputs** | Company Name, Sector, Requested Loan Amount, Credit Officer Field Notes |
+| **Advanced Credit Data** | CIBIL Commercial Report (PDF), EPFO Statements, Related Party Ledgers |
+
+### Document AI Pipeline
+
+The ingestor uses **Google Gemini 1.5 Flash** as the primary extraction engine with automatic document type detection:
+
+- **GST Compliance Statements** → Rich schema: turnover, ITC variance, cash tax ratios, risk flags, document risk exposures
+- **CIBIL Commercial Reports** → CCR Rank, DPD history, suit filed status, wilful default flags
+- **Annual Reports / Financials** → Revenue growth, EBITDA margin, debt-to-equity, auditor flags
+- **Bank Statements** → Opening/closing balances, transaction patterns
+
+Falls back to OpenAI GPT-3.5 if Gemini is unavailable.
 
 ---
 
@@ -44,7 +66,7 @@ Base URL: `http://localhost:8080`
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `GET` | `/` | Health check — returns service status and version |
-| `POST` | `/api/v1/entity` | Create entity profile and initialize a new appraisal session |
+| `POST` | `/api/v1/entity` | Create entity profile with loan amount and initialize session |
 | `GET` | `/api/v1/session/{id}` | Retrieve full session state by ID |
 | `GET` | `/api/v1/sessions` | List all active sessions |
 | `POST` | `/api/v1/ingest` | Upload and parse financial documents (PDF/CSV) |
@@ -60,17 +82,18 @@ Base URL: `http://localhost:8080`
 curl -X POST http://localhost:8080/api/v1/entity \
   -H 'Content-Type: application/json' \
   -d '{
-    "entity_name": "Acme Corp India Pvt Ltd",
-    "cin_gstin": "U12345MH2024PTC123456",
+    "entity_name": "GlobalForge Industries Pvt Ltd",
+    "cin_gstin": "27AAHCG4589Q1ZK",
     "sector": "Manufacturing & Heavy Industries",
-    "facility_type": "Term Loan"
+    "facility_type": "Term Loan",
+    "requested_loan_amount": "50,00,00,000"
   }'
 ```
 
 #### Ingest Document
 ```bash
 curl -X POST http://localhost:8080/api/v1/ingest \
-  -F "file=@financial_statement.pdf" \
+  -F "file=@gst_compliance_statement.pdf" \
   -F "session_id=abc123"
 ```
 
@@ -78,7 +101,7 @@ curl -X POST http://localhost:8080/api/v1/ingest \
 ```bash
 curl -X POST http://localhost:8080/api/v1/research \
   -H 'Content-Type: application/json' \
-  -d '{"session_id": "abc123", "company_name": "Acme Corp", "industry": "Manufacturing"}'
+  -d '{"session_id": "abc123", "company_name": "GlobalForge Industries", "industry": "Manufacturing"}'
 ```
 
 #### Compute Five Cs
@@ -92,14 +115,18 @@ curl http://localhost:8080/api/v1/five-cs/abc123
 
 ### 1. Document Ingestion Pipeline
 
-**Input**: PDF/CSV financial filings (GST returns, ITRs, bank statements, annual reports)
+**Input**: PDF/CSV financial filings (GST returns, ITRs, bank statements, annual reports, CIBIL reports)
 
 **Process**:
 1. **Text Extraction** — PyMuPDF extracts raw text from uploaded PDFs
-2. **LLM Parsing** — GPT-3.5 structures the raw text into typed JSON: revenue figures, EBITDA, debt ratios, flags, and key financial indicators
-3. **Session Enrichment** — Parsed financials are merged into the active session state
+2. **Document Type Detection** — Heuristic classifier identifies GST / CIBIL / Bank Statement / Annual Report from filename + content keywords
+3. **Specialized LLM Parsing** — Gemini 1.5 Flash uses document-specific prompts to extract structured JSON:
+   - GST → `company_financials`, `gst_behavioral_cash_metrics`, `document_risks`, `gst_risk_features`
+   - CIBIL → `ccr_rank`, `payment_history`, `dpd_counts`, `suit_filed_amount`
+   - General → `revenue_yoy_growth`, `ebitda_margin`, `debt_to_equity`, `flags`
+4. **Session Enrichment** — Parsed financials and rich GST data are merged into the active session state
 
-**Output**: Structured `financials` object with numeric fields and risk flags
+**Output**: Structured JSON with numeric fields, risk flags, and full GST behavioral metrics
 
 ---
 
@@ -183,7 +210,7 @@ Where `sanction_pct` ranges from 100% (AAA) to 0% (BB and below).
 ```bash
 # Backend
 cd backend
-cp .env.example .env  # Add your API keys
+cp .env.example .env  # Add your API keys (OpenAI, Tavily, Google AI Studio)
 pip install -r requirements.txt
 uvicorn main:app --port 8080 --reload
 
@@ -203,9 +230,10 @@ Open `http://localhost:5173` in your browser.
 |-------|-----------|
 | Frontend | React 19, TypeScript, Vite, Tailwind CSS |
 | Backend | FastAPI, Python 3.9+, Uvicorn |
-| AI/LLM | OpenAI GPT-3.5/4, LangChain |
+| Document AI | Google Gemini 1.5 Flash (primary), OpenAI GPT-3.5 (fallback) |
+| CAM Generation | OpenAI GPT-4, LangChain |
 | Research | Tavily API (web intelligence) |
-| Document Parsing | PyMuPDF, Pandas |
+| PDF Parsing | PyMuPDF, Pandas |
 
 ---
 
