@@ -22,3 +22,13 @@ numpy
 scikit-learn
 joblib
 psycopg2-binary
+networkx
+matplotlib
+
+# Advanced Document AI & GNN Detection
+torch
+torch_geometric
+transformers
+torchvision
+easyocr
+opencv-python-headless

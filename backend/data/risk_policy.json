@@ -1,0 +1,82 @@
+{
+  "base_rate": 10.0,
+  "leverage": {
+    "low_threshold": 2.0,
+    "medium_threshold": 3.0,
+    "weights": {
+      "low": 0.4,
+      "medium": 0.2,
+      "high": -0.3
+    }
+  },
+  "revenue_to_limit": {
+    "high_threshold": 4.0,
+    "medium_threshold": 2.0,
+    "weights": {
+      "high": 0.3,
+      "medium": 0.1,
+      "low": -0.2
+    }
+  },
+  "ebitda_margin": {
+    "high_threshold": 0.15,
+    "medium_threshold": 0.08,
+    "weights": {
+      "high": 0.2,
+      "medium": 0.05,
+      "low": -0.15
+    }
+  },
+  "overlays": {
+    "management_quality": 0.1,
+    "management_concern": -0.1,
+    "capacity_penalty_base": -0.05,
+    "cibil_factor": -0.2,
+    "litigation_factor": -0.15,
+    "related_party_factor": -0.1,
+    "graph_factor": -0.15,
+    "payroll_positive": 0.05,
+    "payroll_negative": -0.05,
+    "microfinance_exposure_factor": -0.05,
+    "group_liability_factor": -0.03,
+    "short_tenure_factor": -0.02,
+    "high_interest_factor": -0.05,
+    "news_sentiment_factor": 0.05,
+    "promoter_risk_factor": -0.05,
+    "sector_headwind_factor": -0.05,
+    "gst_anomaly_factor": -0.05,
+    "bank_anomaly_factor": -0.05
+  },
+  "spread_bands": {
+    "strong_min": 0.75,
+    "moderate_min": 0.6,
+    "borderline_min": 0.5,
+    "spreads": {
+      "strong": 1.0,
+      "moderate": 2.0,
+      "borderline": 3.0
+    }
+  },
+  "five_c_weights": {
+    "capacity": 0.3,
+    "character": 0.25,
+    "capital": 0.2,
+    "conditions": 0.15,
+    "collateral": 0.1
+  },
+  "sector_policies": {
+    "nbfc": {
+      "leverage": {
+        "low_threshold": 3.0,
+        "medium_threshold": 4.0
+      }
+    },
+    "real_estate": {
+      "leverage": {
+        "low_threshold": 1.5,
+        "medium_threshold": 2.5
+      }
+    }
+  }
+}
+

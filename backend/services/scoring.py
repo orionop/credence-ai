@@ -13,7 +13,10 @@ Key features:
 import logging
 import json
 import numpy as np
-from langchain_openai import ChatOpenAI
+import os
+from pathlib import Path
+from dataclasses import dataclass
+from typing import Dict, Any, List
 from langchain_core.messages import HumanMessage
 from dotenv import load_dotenv
 
@@ -93,11 +96,17 @@ def compute_sanction_limit(requested_cr: float, rating: str) -> str:
     return f"₹{limit:.2f} Cr"
 
 
-# ── LLM-based Five Cs Scoring ───────────────────────────────────────────────
+# Lazy-init to avoid import-time pydantic errors
+_scoring_llm = None
 
-llm = ChatOpenAI(model="gpt-3.5-turbo-1106", temperature=0).bind(
-    response_format={"type": "json_object"}
-)
+def _get_scoring_llm():
+    global _scoring_llm
+    if _scoring_llm is None:
+        from langchain_openai import ChatOpenAI
+        _scoring_llm = ChatOpenAI(model="gpt-3.5-turbo-1106", temperature=0).bind(
+            response_format={"type": "json_object"}
+        )
+    return _scoring_llm
 
 SCORING_PROMPT = """
 You are an expert Indian corporate credit analyst at an institutional bank (e.g. SBI, HDFC, ICICI).
@@ -178,6 +187,7 @@ def compute_five_cs(
 
     try:
         # Use GPT-4 for professional-grade analysis in 'Real Product' mode
+        from langchain_openai import ChatOpenAI
         llm_engine = ChatOpenAI(model="gpt-4-turbo-preview", temperature=0.1).bind(
             response_format={"type": "json_object"}
         )
@@ -281,3 +291,367 @@ def compute_five_cs(
             "commercial_score": 625.0,
             "appraisal_summary": "Entity shows moderate credit profile. Full scoring unavailable due to API error."
         }
+
+
+# ── Local Policy-Driven Scoring ─────────────────────────────────────────────
+
+def load_risk_policy() -> Dict[str, Any]:
+    """Load from backend/data/risk_policy.json"""
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    policy_path = os.path.join(base_dir, "data", "risk_policy.json")
+    if not os.path.exists(policy_path):
+        return {}
+    with open(policy_path, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+def get_effective_policy(sector: str) -> Dict[str, Any]:
+    policy = load_risk_policy()
+    sector = (sector or "").lower()
+    sector_policies = policy.get("sector_policies", {})
+    override = sector_policies.get(sector)
+    if override:
+        for k, v in override.items():
+            if isinstance(v, dict) and isinstance(policy.get(k), dict):
+                merged = dict(policy[k])
+                merged.update(v)
+                policy[k] = merged
+            else:
+                policy[k] = v
+    return policy
+
+@dataclass
+class RiskInputs:
+    latest_revenue: float
+    latest_ebitda: float
+    latest_net_worth: float
+    latest_total_debt: float
+    bank_total_inflows: float
+    bank_total_outflows: float
+    litigation_risk_score: float = 0.0
+    management_quality_score: float = 0.5
+    capacity_utilization_penalty: float = 0.0
+    cibil_risk_score: float = 0.0
+    payroll_stability_score: float = 0.5
+    related_party_risk_score: float = 0.0
+    graph_risk_score: float = 0.0
+    data_completeness_score: float = 0.0
+    has_gst: bool = False
+    has_bank: bool = False
+    sanction_existing_debt: float = 0.0
+    sanction_effective_rate: float = 0.0
+    sanction_microfinance_exposure_flag: bool = False
+    sanction_group_liability_flag: bool = False
+    sanction_short_tenure_flag: bool = False
+    sanction_high_interest_flag: bool = False
+    news_sentiment_score: float = 0.0
+    promoter_risk_score: float = 0.0
+    research_litigation_news_count: float = 0.0
+    research_sector_headwind_score: float = 0.0
+    gst_anomaly_score: float = 0.0
+    bank_anomaly_score: float = 0.0
+    financials_found_flag: bool = False
+    gst_itc_variance_ratio: float = 0.0
+    gst_itc_top_supplier_share: float = 0.0
+    gst_itc_dependency_ratio: float = 0.0
+    gst_cash_tax_ratio: float = 0.0
+    gst_reverse_charge_turnover_ratio: float = 0.0
+    bank_cash_deposit_ratio: float = 0.0
+    bank_round_tripping_score: float = 0.0
+    bank_top_counterparty_share: float = 0.0
+    bank_counterparty_hhi: float = 0.0
+    bank_total_txn_volume: float = 0.0
+    bank_related_party_transfer_share: float = 0.0
+
+@dataclass
+class RiskDecision:
+    approve: bool
+    recommended_limit: float
+    recommended_rate: float
+    score: float
+    reasons: List[str]
+    risk_band: str
+    pd_estimate: float
+    capacity_score: float
+    character_score: float
+    capital_score: float
+    conditions_score: float
+    collateral_score: float
+
+def simple_rule_based_decision(features: RiskInputs, requested_limit: float, sector: str = None, base_rate: float = None) -> RiskDecision:
+    reasons = []
+    policy = get_effective_policy(sector)
+    base_rate = base_rate if base_rate is not None else float(policy.get("base_rate", 10.0))
+
+    capacity_score = 0.5
+    character_score = 0.5
+    capital_score = 0.5
+    conditions_score = 0.5
+    collateral_score = 0.5
+
+    total_debt_for_leverage = features.latest_total_debt + features.sanction_existing_debt
+    leverage = None
+    revenue_to_limit = None
+    if features.latest_net_worth > 0:
+        leverage = (total_debt_for_leverage + requested_limit) / max(features.latest_net_worth, 1.0)
+    if requested_limit > 0 and features.latest_revenue > 0:
+        revenue_to_limit = features.latest_revenue / max(requested_limit, 1.0)
+    
+    lev_cfg = policy.get("leverage", {})
+    rev_cfg = policy.get("revenue_to_limit", {})
+    ebitda_cfg = policy.get("ebitda_margin", {})
+    overlays = policy.get("overlays", {})
+
+    lev_low = float(lev_cfg.get("low_threshold", 2.0))
+    lev_med = float(lev_cfg.get("medium_threshold", 3.0))
+    lev_w = lev_cfg.get("weights", {})
+    if leverage is not None:
+        if leverage <= lev_low:
+            capital_score += float(lev_w.get("low", 0.4))
+            reasons.append(f"Comfortable leverage (Debt/Net Worth <= {lev_low}x).")
+        elif leverage <= lev_med:
+            capital_score += float(lev_w.get("medium", 0.2))
+            reasons.append(f"Moderate leverage (Debt/Net Worth between {lev_low}x and {lev_med}x).")
+        else:
+            capital_score += float(lev_w.get("high", -0.3))
+            reasons.append(f"High leverage (Debt/Net Worth > {lev_med}x).")
+
+    rev_high = float(rev_cfg.get("high_threshold", 4.0))
+    rev_med = float(rev_cfg.get("medium_threshold", 2.0))
+    rev_w = rev_cfg.get("weights", {})
+    if revenue_to_limit is not None:
+        if revenue_to_limit >= rev_high:
+            capacity_score += float(rev_w.get("high", 0.3))
+            reasons.append(f"Requested limit is conservative relative to revenue (Revenue / Limit >= {rev_high}x).")
+        elif revenue_to_limit >= rev_med:
+            capacity_score += float(rev_w.get("medium", 0.1))
+            reasons.append(f"Requested limit is reasonable relative to revenue (Revenue / Limit between {rev_med}x and {rev_high}x).")
+        else:
+            capacity_score += float(rev_w.get("low", -0.2))
+            reasons.append(f"Requested limit is aggressive relative to revenue (Revenue / Limit < {rev_med}x).")
+
+    ebitda_high = float(ebitda_cfg.get("high_threshold", 0.15))
+    ebitda_med = float(ebitda_cfg.get("medium_threshold", 0.08))
+    ebitda_w = ebitda_cfg.get("weights", {})
+    if features.latest_revenue > 0:
+        ebitda_margin = features.latest_ebitda / max(features.latest_revenue, 1.0)
+        if ebitda_margin >= ebitda_high:
+            capacity_score += float(ebitda_w.get("high", 0.2))
+            reasons.append(f"Healthy EBITDA margin (>= {ebitda_high:.0%}).")
+        elif ebitda_margin >= ebitda_med:
+            capacity_score += float(ebitda_w.get("medium", 0.05))
+            reasons.append(f"Acceptable EBITDA margin ({ebitda_med:.0%}–{ebitda_high:.0%}).")
+        else:
+            capacity_score += float(ebitda_w.get("low", -0.15))
+            reasons.append(f"Thin EBITDA margin (< {ebitda_med:.0%}).")
+
+    if features.management_quality_score >= 0.7:
+        character_score += float(overlays.get("management_quality", 0.1))
+    elif features.management_quality_score <= 0.3:
+        character_score += float(overlays.get("management_concern", -0.1))
+
+    if features.capacity_utilization_penalty > 0.0:
+        capacity_score += float(overlays.get("capacity_penalty_base", -0.05)) * (1.0 + features.capacity_utilization_penalty)
+
+    if features.cibil_risk_score > 0.0:
+        character_score += float(overlays.get("cibil_factor", -0.2)) * features.cibil_risk_score
+    if features.litigation_risk_score > 0.0:
+        character_score += float(overlays.get("litigation_factor", -0.15)) * features.litigation_risk_score
+    if features.related_party_risk_score > 0.0:
+        character_score += float(overlays.get("related_party_factor", -0.1)) * features.related_party_risk_score
+    if features.graph_risk_score > 0.0:
+        character_score += float(overlays.get("graph_factor", -0.15)) * features.graph_risk_score
+
+    # Payroll stability
+    if features.payroll_stability_score >= 0.7:
+        capacity_score += float(overlays.get("payroll_positive", 0.05))
+    elif features.payroll_stability_score <= 0.3:
+        capacity_score += float(overlays.get("payroll_negative", -0.05))
+
+    # Sanction letter flags
+    if features.sanction_microfinance_exposure_flag:
+        conditions_score += float(overlays.get("microfinance_exposure_factor", -0.05))
+    if features.sanction_group_liability_flag:
+        conditions_score += float(overlays.get("group_liability_factor", -0.03))
+    if features.sanction_short_tenure_flag:
+        conditions_score += float(overlays.get("short_tenure_factor", -0.02))
+    if features.sanction_high_interest_flag:
+        conditions_score += float(overlays.get("high_interest_factor", -0.05))
+
+    # News sentiment & promoter risk (from research agent)
+    if features.news_sentiment_score > 0.0:
+        conditions_score += float(overlays.get("news_sentiment_factor", 0.05)) * features.news_sentiment_score
+    if features.promoter_risk_score > 0.0:
+        character_score += float(overlays.get("promoter_risk_factor", -0.05)) * features.promoter_risk_score
+    if features.research_sector_headwind_score > 0.0:
+        conditions_score += float(overlays.get("sector_headwind_factor", -0.05)) * features.research_sector_headwind_score
+
+    # GST & Bank anomaly scores (from z-score detector)
+    if features.gst_anomaly_score > 0.0:
+        conditions_score += float(overlays.get("gst_anomaly_factor", -0.05)) * features.gst_anomaly_score
+    if features.bank_anomaly_score > 0.0:
+        conditions_score += float(overlays.get("bank_anomaly_factor", -0.05)) * features.bank_anomaly_score
+
+    if features.gst_itc_variance_ratio > 0.0:
+        conditions_score -= min(0.08, features.gst_itc_variance_ratio * 0.08)
+    if features.gst_itc_dependency_ratio > 0.9:
+        conditions_score -= 0.03
+    if features.gst_cash_tax_ratio > 0.0 and features.gst_cash_tax_ratio < 0.15:
+        conditions_score -= 0.02
+    if features.bank_round_tripping_score > 0.3:
+        conditions_score -= 0.04
+
+    def _clamp(x: float) -> float:
+        return max(0.0, min(1.0, x))
+
+    capacity_score = _clamp(capacity_score)
+    character_score = _clamp(character_score)
+    capital_score = _clamp(capital_score)
+    conditions_score = _clamp(conditions_score)
+    collateral_score = _clamp(collateral_score)
+
+    five_c_weights = policy.get("five_c_weights", {})
+    w_capacity = float(five_c_weights.get("capacity", 0.3))
+    w_character = float(five_c_weights.get("character", 0.25))
+    w_capital = float(five_c_weights.get("capital", 0.2))
+    w_conditions = float(five_c_weights.get("conditions", 0.15))
+    w_collateral = float(five_c_weights.get("collateral", 0.1))
+
+    normalized_score = (
+        capacity_score * w_capacity
+        + character_score * w_character
+        + capital_score * w_capital
+        + conditions_score * w_conditions
+        + collateral_score * w_collateral
+    )
+
+    approve = normalized_score >= 0.5
+    recommended_limit = requested_limit * (1.1 if normalized_score >= 0.75 else 1.0 if normalized_score >= 0.6 else 0.8) if approve else 0.0
+
+    bands = policy.get("spread_bands", {})
+    strong_min = float(bands.get("strong_min", 0.75))
+    moderate_min = float(bands.get("moderate_min", 0.6))
+    borderline_min = float(bands.get("borderline_min", 0.5))
+    spreads_cfg = bands.get("spreads", {})
+    
+    if normalized_score >= strong_min:
+        spread = float(spreads_cfg.get("strong", 1.0))
+        risk_band, pd_estimate = "LOW", 0.01
+    elif normalized_score >= moderate_min:
+        spread = float(spreads_cfg.get("moderate", 2.0))
+        risk_band, pd_estimate = "MEDIUM", 0.05
+    elif normalized_score >= borderline_min:
+        spread = float(spreads_cfg.get("borderline", 3.0))
+        risk_band, pd_estimate = "ELEVATED", 0.10
+    else:
+        spread, risk_band, pd_estimate = 0.0, "HIGH", 0.2
+
+    recommended_rate = base_rate + spread if approve else 0.0
+
+    return RiskDecision(
+        approve=approve, recommended_limit=recommended_limit, recommended_rate=recommended_rate,
+        score=normalized_score, reasons=reasons, risk_band=risk_band, pd_estimate=pd_estimate,
+        capacity_score=capacity_score, character_score=character_score, capital_score=capital_score,
+        conditions_score=conditions_score, collateral_score=collateral_score
+    )
+
+def compute_local_risk_decision(
+    financials: Dict[str, Any], 
+    rich_gst_data: Dict[str, Any], 
+    sector: str, 
+    requested_limit: str,
+    gst_reconciliation: Dict[str, Any] = None,
+    bank_intelligence: Dict[str, Any] = None,
+    graph_analysis: Dict[str, Any] = None,
+    advanced_credit: Dict[str, Any] = None,
+    qualitative_scores: Dict[str, Any] = None,
+    z_score_anomalies: Dict[str, Any] = None
+) -> Dict[str, Any]:
+    """
+    Compute risk decision using local rule-based engine.
+    """
+    gst = gst_reconciliation or {}
+    bank = bank_intelligence or {}
+    graph = graph_analysis or {}
+    adv = advanced_credit or {}
+    qual = qualitative_scores or {}
+    z_anom = z_score_anomalies or {}
+    
+    try:
+        clean_amt = "".join(filter(str.isdigit, str(requested_limit)))
+        req_limit_float = float(clean_amt) if clean_amt else 10000000.0  # default 10M
+    except ValueError:
+        req_limit_float = 10000000.0
+
+    # Build RiskInputs — wire every feature from its source module
+    inputs = RiskInputs(
+        latest_revenue=float(financials.get("latest_revenue", 0.0)),
+        latest_ebitda=float(financials.get("latest_ebitda", 0.0)),
+        latest_net_worth=float(financials.get("latest_net_worth", 0.0)),
+        latest_total_debt=float(financials.get("latest_total_debt", 0.0)),
+        bank_total_inflows=float(financials.get("total_inflow", 0.0)),
+        bank_total_outflows=float(financials.get("total_outflow", 0.0)),
+        
+        # From qualitative module
+        litigation_risk_score=float(financials.get("litigation_risk_score", 0.0)),
+        management_quality_score=float(qual.get("management_quality_score", 0.5)),
+        capacity_utilization_penalty=float(qual.get("capacity_utilization_penalty", 0.0)),
+        
+        # From advanced_credit module
+        cibil_risk_score=float(adv.get("cibil_risk_score", 0.0)),
+        payroll_stability_score=float(financials.get("payroll_stability_score", 0.5)),
+        related_party_risk_score=float(adv.get("related_party_risk_score", 0.0)),
+        
+        # From graph analysis module
+        graph_risk_score=float(graph.get("graph_risk_score", 0.0)),
+        
+        has_gst=bool(gst),
+        has_bank=bool(bank),
+        
+        # Sanction letter features (from financials, populated by ingestor.extract_sanction_features)
+        sanction_existing_debt=float(financials.get("sanction_existing_debt", 0.0)),
+        sanction_effective_rate=float(financials.get("sanction_effective_rate", 0.0)),
+        sanction_microfinance_exposure_flag=bool(financials.get("sanction_microfinance_exposure_flag", False)),
+        sanction_group_liability_flag=bool(financials.get("sanction_group_liability_flag", False)),
+        sanction_short_tenure_flag=bool(financials.get("sanction_short_tenure_flag", False)),
+        sanction_high_interest_flag=bool(financials.get("sanction_high_interest_flag", False)),
+        
+        # From research agent (surfaced via financials or research)
+        news_sentiment_score=float(financials.get("news_sentiment_score", 0.0)),
+        promoter_risk_score=float(financials.get("promoter_risk_score", 0.0)),
+        research_litigation_news_count=float(financials.get("research_litigation_news_count", 0.0)),
+        research_sector_headwind_score=float(financials.get("research_sector_headwind_score", 0.0)),
+        
+        # From z-score anomaly detector
+        gst_anomaly_score=float(z_anom.get("gst_anomaly_score", gst.get("gst_anomaly_score", 0.0))),
+        bank_anomaly_score=float(z_anom.get("bank_anomaly_score", bank.get("bank_anomaly_score", 0.0))),
+        
+        # GST reconciliation features
+        gst_itc_variance_ratio=float(gst.get("gst_itc_variance_ratio", 0.0)),
+        gst_itc_top_supplier_share=float(gst.get("gst_itc_top_supplier_share", 0.0) or 0.0),
+        gst_itc_dependency_ratio=float(gst.get("gst_itc_dependency_ratio", 0.0)),
+        gst_cash_tax_ratio=float(gst.get("gst_cash_tax_ratio", 0.0)),
+        gst_reverse_charge_turnover_ratio=float(gst.get("gst_reverse_charge_turnover_ratio", 0.0)),
+        
+        # Bank intelligence features
+        bank_cash_deposit_ratio=float(bank.get("bank_cash_deposit_ratio", 0.0)),
+        bank_round_tripping_score=float(bank.get("bank_round_tripping_score", 0.0)),
+        bank_top_counterparty_share=float(bank.get("bank_top_counterparty_share", 0.0) or 0.0),
+        bank_related_party_transfer_share=float(bank.get("bank_related_party_transfer_share", 0.0)),
+    )
+    
+    decision = simple_rule_based_decision(inputs, req_limit_float, sector)
+    
+    return {
+        "approve": decision.approve,
+        "recommended_limit": decision.recommended_limit,
+        "recommended_rate": decision.recommended_rate,
+        "score": decision.score,
+        "reasons": decision.reasons,
+        "risk_band": decision.risk_band,
+        "pd_estimate": decision.pd_estimate,
+        "capacity_score": decision.capacity_score,
+        "character_score": decision.character_score,
+        "capital_score": decision.capital_score,
+        "conditions_score": decision.conditions_score,
+        "collateral_score": decision.collateral_score,
+    }

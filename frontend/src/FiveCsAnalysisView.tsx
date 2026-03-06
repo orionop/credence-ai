@@ -164,11 +164,11 @@ export default function FiveCsAnalysisView() {
                                             <span className="material-symbols-outlined">{c.icon}</span>
                                         </div>
                                         <div className="text-right">
-                                            <span className="text-2xl font-black text-slate-100">{scoreValues[i]}</span>
+                                            <span className="text-2xl font-black text-slate-900 dark:text-slate-100">{scoreValues[i]}</span>
                                             <span className="text-xs text-slate-500">/100</span>
                                         </div>
                                     </div>
-                                    <h4 className="font-bold text-slate-100 uppercase text-xs tracking-widest mb-1">{c.label}</h4>
+                                    <h4 className="font-bold text-slate-900 dark:text-slate-100 uppercase text-xs tracking-widest mb-1">{c.label}</h4>
                                     <p className="text-[11px] text-slate-400 mb-4">{csObj?.summary || 'Run scoring to see analysis'}</p>
                                     <div className="mt-auto pt-4 border-t border-primary/10">
                                         <details className="group">
@@ -176,7 +176,7 @@ export default function FiveCsAnalysisView() {
                                                 <span>WHY?</span>
                                                 <span className="material-symbols-outlined text-sm group-open:rotate-180 transition-transform">expand_more</span>
                                             </summary>
-                                            <div className="text-[13px] leading-relaxed italic text-slate-300 bg-background-dark/40 p-3 rounded">
+                                            <div className="text-[13px] leading-relaxed italic text-slate-700 dark:text-slate-300 bg-slate-200/50 dark:bg-background-dark/40 p-3 rounded">
                                                 {csObj?.detail || 'Score explanation will appear after computing Five Cs analysis.'}
                                             </div>
                                         </details>
@@ -204,7 +204,7 @@ export default function FiveCsAnalysisView() {
                         <h3 className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-6">Overall Credit Rating</h3>
                         <div className="flex items-center gap-6 mb-8">
                             <div className="size-24 rounded-full border-4 border-primary flex flex-col items-center justify-center">
-                                <span className="text-3xl font-black text-slate-100">
+                                <span className="text-3xl font-black text-slate-900 dark:text-slate-100">
                                     {scores?.credit_rating || '—'}
                                 </span>
                                 <span className="text-[10px] font-bold text-primary uppercase">
@@ -213,7 +213,7 @@ export default function FiveCsAnalysisView() {
                             </div>
                             <div className="flex-1">
                                 <div className="text-xs font-bold text-slate-400 mb-2 uppercase">Risk Profile</div>
-                                <div className="w-full h-2 bg-background-dark rounded-full overflow-hidden flex">
+                                <div className="w-full h-2 bg-slate-200 dark:bg-background-dark rounded-full overflow-hidden flex">
                                     <div className="h-full bg-green-500" style={{ width: `${Math.max(10, 100 - overallScore)}%` }}></div>
                                     <div className="h-full bg-primary" style={{ width: `${overallScore}%` }}></div>
                                 </div>
@@ -226,9 +226,9 @@ export default function FiveCsAnalysisView() {
                         </div>
                         <div className="space-y-4">
                             {scores?.appraisal_summary && (
-                                <div className="p-4 bg-background-dark rounded-lg border border-primary/10">
+                                <div className="p-4 bg-slate-100 dark:bg-background-dark rounded-lg border border-primary/10">
                                     <h4 className="text-xs font-bold text-primary uppercase mb-2">AI Appraisal Summary</h4>
-                                    <p className="text-sm leading-relaxed text-slate-300 italic">
+                                    <p className="text-sm leading-relaxed text-slate-700 dark:text-slate-300 italic">
                                         "{scores.appraisal_summary}"
                                     </p>
                                 </div>
@@ -243,7 +243,7 @@ export default function FiveCsAnalysisView() {
                                 ].map((item) => (
                                     <div key={item.label} className="flex justify-between items-center text-xs">
                                         <span className="text-slate-500">{item.label}</span>
-                                        <span className={`font-bold ${item.color || 'text-slate-100'}`}>{item.value}</span>
+                                        <span className={`font-bold ${item.color || 'text-slate-900 dark:text-slate-100'}`}>{item.value}</span>
                                     </div>
                                 ))}
                             </div>
@@ -264,7 +264,7 @@ export default function FiveCsAnalysisView() {
                 <div className="flex items-center gap-3 mb-8">
                     <span className="material-symbols-outlined text-primary text-3xl">verified_user</span>
                     <div>
-                        <h3 className="text-xl font-bold text-slate-100 uppercase tracking-widest">Institutional Intelligence Layer</h3>
+                        <h3 className="text-xl font-bold text-slate-900 dark:text-slate-100 uppercase tracking-widest">Institutional Intelligence Layer</h3>
                         <p className="text-xs text-slate-500 font-medium">Verification results from mathematical fraud & anomaly models</p>
                     </div>
                 </div>
@@ -276,7 +276,27 @@ export default function FiveCsAnalysisView() {
                             <span className="material-symbols-outlined text-6xl text-primary">analytics</span>
                         </div>
                         <h4 className="text-xs font-bold text-slate-500 uppercase mb-4">Anomaly Risk Score (Isolation Forest)</h4>
-                        {app.richGstData?.gst_risk_features?.anomaly_detection ? (
+                        {app.zScoreAnomalies ? (
+                            <div className="space-y-4">
+                                <div className="flex items-end gap-2">
+                                    <span className="text-4xl font-black text-primary">
+                                        {app.zScoreAnomalies.gst_anomaly_score || 0}%
+                                    </span>
+                                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded mb-1 ${app.zScoreAnomalies.gst_anomaly_score > 30 ? 'bg-red-500/20 text-red-500' : 'bg-green-500/20 text-green-500'
+                                        }`}>
+                                        {app.zScoreAnomalies.gst_anomaly_score > 30 ? 'High Risk' : 'Low Risk'}
+                                    </span>
+                                </div>
+                                <div className="space-y-2">
+                                    {Object.entries(app.zScoreAnomalies.gst_anomalies || {}).slice(0, 3).map(([k, v]: [string, any]) => (
+                                        <div key={k} className="flex justify-between text-[11px]">
+                                            <span className="text-slate-500 capitalize">{k.replace(/_/g, ' ')}</span>
+                                            <span className="text-slate-700 dark:text-slate-300 font-mono text-red-600 dark:text-red-400">Z: {v.toFixed(2)}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        ) : app.richGstData?.gst_risk_features?.anomaly_detection ? (
                             <div className="space-y-4">
                                 <div className="flex items-end gap-2">
                                     <span className="text-4xl font-black text-primary">
@@ -291,7 +311,7 @@ export default function FiveCsAnalysisView() {
                                     {Object.entries(app.richGstData.gst_risk_features.anomaly_detection.metrics || {}).map(([k, v]: [string, any]) => (
                                         <div key={k} className="flex justify-between text-[11px]">
                                             <span className="text-slate-500 capitalize">{k.replace(/_/g, ' ')}</span>
-                                            <span className="text-slate-300 font-mono">{v}</span>
+                                            <span className="text-slate-700 dark:text-slate-300 font-mono">{v}</span>
                                         </div>
                                     ))}
                                 </div>
@@ -329,24 +349,49 @@ export default function FiveCsAnalysisView() {
                         <div className="absolute top-0 right-0 p-4 opacity-5">
                             <span className="material-symbols-outlined text-6xl text-primary">psychology</span>
                         </div>
-                        <h4 className="text-xs font-bold text-slate-500 uppercase mb-4">SHAP Explainability</h4>
-                        <div className="space-y-3">
-                            {[
-                                { label: 'Bank Cash-to-Revenue', weight: 85, color: 'bg-green-500' },
-                                { label: 'ITC Cluster Density', weight: 45, color: 'bg-primary' },
-                                { label: 'Supplier Connectivity', weight: 12, color: 'bg-red-500' },
-                            ].map(item => (
-                                <div key={item.label} className="space-y-1">
-                                    <div className="flex justify-between text-[10px] font-bold font-mono">
-                                        <span className="text-slate-400">{item.label}</span>
-                                        <span className="text-slate-500">Weight: {item.weight}%</span>
+                        <h4 className="text-xs font-bold text-slate-500 uppercase mb-4">Policy Engine Weights</h4>
+                        {app.localRiskDecision ? (
+                            <div className="space-y-3">
+                                {[
+                                    { label: 'Capacity (Revenue to Limit)', weight: app.localRiskDecision.capacity_score * 100, color: 'bg-green-500' },
+                                    { label: 'Capital (Debt to Equity)', weight: app.localRiskDecision.capital_score * 100, color: 'bg-primary' },
+                                    { label: 'Character (Management & Defaults)', weight: app.localRiskDecision.character_score * 100, color: 'bg-amber-500' },
+                                ].map(item => (
+                                    <div key={item.label} className="space-y-1">
+                                        <div className="flex justify-between text-[10px] font-bold font-mono">
+                                            <span className="text-slate-400">{item.label}</span>
+                                            <span className="text-slate-500">{item.weight.toFixed(0)}% Match</span>
+                                        </div>
+                                        <div className="h-1 w-full bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
+                                            <div className={`h-full ${item.color}`} style={{ width: `${item.weight}%` }}></div>
+                                        </div>
                                     </div>
-                                    <div className="h-1 w-full bg-slate-800 rounded-full overflow-hidden">
-                                        <div className={`h-full ${item.color}`} style={{ width: `${item.weight}%` }}></div>
-                                    </div>
+                                ))}
+                                <div className="mt-3 text-[10px] text-slate-500 italic p-2 bg-primary/5 rounded border border-primary/10">
+                                    Final PD Estimate: <span className="font-bold text-primary">{(app.localRiskDecision.pd_estimate * 100).toFixed(1)}%</span>
+                                    <br />
+                                    Risk Band: <span className="font-bold text-primary">{app.localRiskDecision.risk_band}</span>
                                 </div>
-                            ))}
-                        </div>
+                            </div>
+                        ) : (
+                            <div className="space-y-3">
+                                {[
+                                    { label: 'Bank Cash-to-Revenue', weight: 85, color: 'bg-green-500' },
+                                    { label: 'ITC Cluster Density', weight: 45, color: 'bg-primary' },
+                                    { label: 'Supplier Connectivity', weight: 12, color: 'bg-red-500' },
+                                ].map(item => (
+                                    <div key={item.label} className="space-y-1">
+                                        <div className="flex justify-between text-[10px] font-bold font-mono">
+                                            <span className="text-slate-400">{item.label}</span>
+                                            <span className="text-slate-500">Weight: {item.weight}%</span>
+                                        </div>
+                                        <div className="h-1 w-full bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
+                                            <div className={`h-full ${item.color}`} style={{ width: `${item.weight}%` }}></div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>

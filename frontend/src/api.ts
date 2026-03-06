@@ -62,6 +62,14 @@ export interface SessionData {
     research_insights: ResearchInsight[]
     primary_notes: string
     five_cs_scores: FiveCsResult | Record<string, never>
+    gst_reconciliation?: Record<string, any>
+    bank_intelligence?: Record<string, any>
+    graph_analysis?: Record<string, any>
+    stress_test_results?: any[]
+    advanced_credit?: Record<string, any>
+    qualitative_scores?: Record<string, any>
+    local_risk_decision?: Record<string, any>
+    z_score_anomalies?: Record<string, any>
     cam_report: string
     credit_score: number
     credit_rating: string
@@ -190,6 +198,49 @@ export async function generateCAM(
         }),
     })
     if (!res.ok) throw new Error(`CAM generation failed: ${res.statusText}`)
+    return res.json()
+}
+
+/** Nashee Analytical Modules */
+export async function getGstReconciliation(sessionId: string): Promise<{ status: string; session_id: string; gst_reconciliation: Record<string, any> }> {
+    const res = await fetch(`${API_BASE}/gst-reconciliation/${sessionId}`)
+    if (!res.ok) throw new Error(`GST reconciliation failed: ${res.statusText}`)
+    return res.json()
+}
+
+export async function getBankIntelligence(sessionId: string): Promise<{ status: string; session_id: string; bank_intelligence: Record<string, any> }> {
+    const res = await fetch(`${API_BASE}/bank-intelligence/${sessionId}`)
+    if (!res.ok) throw new Error(`Bank intelligence failed: ${res.statusText}`)
+    return res.json()
+}
+
+export async function getGraphAnalysis(sessionId: string): Promise<{ status: string; session_id: string; graph_analysis: Record<string, any> }> {
+    const res = await fetch(`${API_BASE}/graph-analysis/${sessionId}`)
+    if (!res.ok) throw new Error(`Graph analysis failed: ${res.statusText}`)
+    return res.json()
+}
+
+export async function getStressTest(sessionId: string): Promise<{ status: string; session_id: string; stress_test_results: any[] }> {
+    const res = await fetch(`${API_BASE}/stress-test/${sessionId}`)
+    if (!res.ok) throw new Error(`Stress test failed: ${res.statusText}`)
+    return res.json()
+}
+
+export async function getAdvancedCredit(sessionId: string): Promise<{ status: string; session_id: string; advanced_credit: Record<string, any> }> {
+    const res = await fetch(`${API_BASE}/advanced-credit/${sessionId}`)
+    if (!res.ok) throw new Error(`Advanced credit failed: ${res.statusText}`)
+    return res.json()
+}
+
+export async function getQualitativeScoring(sessionId: string): Promise<{ status: string; session_id: string; qualitative_scores: Record<string, any> }> {
+    const res = await fetch(`${API_BASE}/qualitative-scoring/${sessionId}`)
+    if (!res.ok) throw new Error(`Qualitative scoring failed: ${res.statusText}`)
+    return res.json()
+}
+
+export async function getLocalRiskDecision(sessionId: string): Promise<{ status: string; session_id: string; local_risk_decision: Record<string, any> }> {
+    const res = await fetch(`${API_BASE}/local-risk-decision/${sessionId}`)
+    if (!res.ok) throw new Error(`Local risk decision failed: ${res.statusText}`)
     return res.json()
 }
 

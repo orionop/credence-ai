@@ -13,7 +13,14 @@ from services.session import (
     create_session, get_session, get_or_create_default_session,
     update_session, list_sessions, session_to_dict, IngestedDoc
 )
-from services.scoring import compute_five_cs
+from services.scoring import compute_five_cs, compute_local_risk_decision
+from services.gst_reconciliation import run_gst_reconciliation
+from services.bank_intelligence import run_bank_intelligence
+from services.graph_analysis import build_graph_from_session
+from services.stress_test import run_stress_tests
+from services.advanced_credit import analyze_cibil_from_extracted, analyze_related_party
+from services.qualitative_inputs import score_qualitative_notes
+from services.anomaly_detector import compute_gst_z_score_anomalies, compute_bank_z_score_anomalies
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -250,6 +257,132 @@ async def save_primary_insights(request: PrimaryInsightsRequest):
         "session_id": request.session_id,
         "notes_saved": True
     }
+
+
+# ── Analytical Modules (Phase 2 & 3 Integration) ─────────────────────────────
+
+@app.get("/api/v1/gst-reconciliation/{session_id}")
+async def get_gst_reconciliation(session_id: str):
+    session = get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    # Just run off rich_gst_data and financials
+    rich_gst = session.rich_gst_data or {}
+    financials = session.financials or {}
+    gst_result = run_gst_reconciliation(rich_gst, financials)
+    z_scores = compute_gst_z_score_anomalies(None) # Placeholders without actual time-series Pandas DF
+    
+    result = {**gst_result, **z_scores}
+    update_session(session.id, gst_reconciliation=result)
+    
+    return {"status": "success", "session_id": session_id, "gst_reconciliation": result}
+
+@app.get("/api/v1/bank-intelligence/{session_id}")
+async def get_bank_intelligence(session_id: str):
+    session = get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+        
+    bank_result = run_bank_intelligence(session.financials or {}, session.ingested_docs)
+    z_scores = compute_bank_z_score_anomalies(None) # Placeholders
+    
+    result = {**bank_result, **z_scores}
+    update_session(session.id, bank_intelligence=result)
+    
+    return {"status": "success", "session_id": session_id, "bank_intelligence": result}
+
+@app.get("/api/v1/graph-analysis/{session_id}")
+async def get_graph_analysis(session_id: str):
+    session = get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    result = build_graph_from_session(
+        session.entity_name or "Entity",
+        session.rich_gst_data or {}, 
+        session.bank_intelligence or {}, 
+        session.financials or {}
+    )
+    update_session(session.id, graph_analysis=result)
+    
+    return {"status": "success", "session_id": session_id, "graph_analysis": result}
+
+@app.get("/api/v1/stress-test/{session_id}")
+async def get_stress_test(session_id: str):
+    session = get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+        
+    base_decision = session.local_risk_decision or {}
+    
+    try:
+        clean_amt = "".join(filter(str.isdigit, str(session.requested_loan_amount)))
+        req_limit = float(clean_amt) if clean_amt else 10000000.0
+    except ValueError:
+        req_limit = 10000000.0
+
+    result = run_stress_tests(
+        session.financials, 
+        session.rich_gst_data or {}, 
+        session.sector or "", 
+        req_limit, 
+        base_decision
+    )
+    update_session(session.id, stress_test_results=result)
+    
+    return {"status": "success", "session_id": session_id, "stress_test_results": result}
+
+@app.get("/api/v1/advanced-credit/{session_id}")
+async def get_advanced_credit(session_id: str):
+    session = get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+        
+    # Extract from all docs for cibil
+    all_extracted = [d.extracted_data for d in session.ingested_docs if d.doc_type == "CIBIL"]
+    cibil_data = all_extracted[0] if all_extracted else {}
+    
+    cibil_res = analyze_cibil_from_extracted(cibil_data)
+    rp_res = analyze_related_party(session.bank_intelligence or {}, session.financials)
+    
+    result = {**cibil_res, **rp_res}
+    update_session(session.id, advanced_credit=result)
+    
+    return {"status": "success", "session_id": session_id, "advanced_credit": result}
+
+@app.get("/api/v1/qualitative-scoring/{session_id}")
+async def get_qualitative_scoring(session_id: str):
+    session = get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+        
+    result = score_qualitative_notes(session.primary_notes)
+    update_session(session.id, qualitative_scores=result)
+    
+    return {"status": "success", "session_id": session_id, "qualitative_scores": result}
+    
+@app.get("/api/v1/local-risk-decision/{session_id}")
+async def get_local_risk_decision(session_id: str):
+    session = get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+        
+    result = compute_local_risk_decision(
+        session.financials, 
+        session.rich_gst_data or {}, 
+        session.sector or "", 
+        session.requested_loan_amount or "",
+        session.gst_reconciliation,
+        session.bank_intelligence,
+        session.graph_analysis,
+        session.advanced_credit,
+        session.qualitative_scores,
+        session.z_score_anomalies
+    )
+    update_session(session.id, local_risk_decision=result)
+    
+    return {"status": "success", "session_id": session_id, "local_risk_decision": result}
 
 
 # ── Five Cs Scoring ──────────────────────────────────────────────────────────

@@ -33,6 +33,16 @@ interface AppState {
     // Five Cs
     fiveCsScores: FiveCsResult | null
 
+    // Nashee Modules
+    gstReconciliation: Record<string, any> | null
+    bankIntelligence: Record<string, any> | null
+    graphAnalysis: Record<string, any> | null
+    stressTestResults: any[] | null
+    advancedCredit: Record<string, any> | null
+    qualitativeScores: Record<string, any> | null
+    localRiskDecision: Record<string, any> | null
+    zScoreAnomalies: Record<string, any> | null
+
     // CAM
     camReport: string
 
@@ -47,6 +57,8 @@ interface AppState {
     isLoading: Record<string, boolean>
     errors: Record<string, string>
     toastMessage: string | null
+    theme: 'light' | 'dark'
+    sessionsList: SessionData[]
 }
 
 interface AppActions {
@@ -65,6 +77,9 @@ interface AppActions {
     // Five Cs
     computeFiveCs: () => Promise<void>
 
+    // Nashee Modules
+    fetchNasheeModules: () => Promise<void>
+
     // CAM
     generateCAM: () => Promise<void>
 
@@ -72,6 +87,8 @@ interface AppActions {
     clearError: (key: string) => void
     clearToast: () => void
     loadSession: (sessionId: string) => Promise<void>
+    fetchSessionsList: () => Promise<void>
+    toggleTheme: () => void
 }
 
 type AppContextType = AppState & AppActions
@@ -96,6 +113,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const [researchInsights, setResearchInsights] = useState<ResearchInsight[]>([])
     const [primaryNotes, setPrimaryNotes] = useState('')
     const [fiveCsScores, setFiveCsScores] = useState<FiveCsResult | null>(null)
+    const [gstReconciliation, setGstReconciliation] = useState<Record<string, any> | null>(null)
+    const [bankIntelligence, setBankIntelligence] = useState<Record<string, any> | null>(null)
+    const [graphAnalysis, setGraphAnalysis] = useState<Record<string, any> | null>(null)
+    const [stressTestResults, setStressTestResults] = useState<any[] | null>(null)
+    const [advancedCredit, setAdvancedCredit] = useState<Record<string, any> | null>(null)
+    const [qualitativeScores, setQualitativeScores] = useState<Record<string, any> | null>(null)
+    const [localRiskDecision, setLocalRiskDecision] = useState<Record<string, any> | null>(null)
+    const [zScoreAnomalies, setZScoreAnomalies] = useState<Record<string, any> | null>(null)
     const [camReport, setCamReport] = useState('')
     const [creditScore, setCreditScore] = useState(0)
     const [creditRating, setCreditRating] = useState('')
@@ -105,6 +130,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const [isLoading, setIsLoading] = useState<Record<string, boolean>>({})
     const [errors, setErrors] = useState<Record<string, string>>({})
     const [toastMessage, setToastMessage] = useState<string | null>(null)
+    const [theme, setTheme] = useState<'light' | 'dark'>('light')
+    const [sessionsList, setSessionsList] = useState<SessionData[]>([])
 
     // Helpers
     const setLoadingFor = (key: string, val: boolean) =>
@@ -137,6 +164,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (s.five_cs_scores && 'overall_score' in s.five_cs_scores) {
             setFiveCsScores(s.five_cs_scores as FiveCsResult)
         }
+        setGstReconciliation(s.gst_reconciliation || null)
+        setBankIntelligence(s.bank_intelligence || null)
+        setGraphAnalysis(s.graph_analysis || null)
+        setStressTestResults(s.stress_test_results || null)
+        setAdvancedCredit(s.advanced_credit || null)
+        setQualitativeScores(s.qualitative_scores || null)
+        setLocalRiskDecision(s.local_risk_decision || null)
+        setZScoreAnomalies(s.z_score_anomalies || null)
         setCamReport(s.cam_report)
         setCreditScore(s.credit_score)
         setCreditRating(s.credit_rating)
@@ -227,6 +262,41 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
     }, [sessionId])
 
+    const fetchNasheeModules = useCallback(async () => {
+        if (!sessionId) { setErrorFor('nashee', 'No active session'); return }
+        setLoadingFor('nashee', true)
+        try {
+            const [gst, bank, graph, stress, adv, qual, local] = await Promise.all([
+                api.getGstReconciliation(sessionId),
+                api.getBankIntelligence(sessionId),
+                api.getGraphAnalysis(sessionId),
+                api.getStressTest(sessionId),
+                api.getAdvancedCredit(sessionId),
+                api.getQualitativeScoring(sessionId),
+                api.getLocalRiskDecision(sessionId)
+            ])
+            setGstReconciliation(gst.gst_reconciliation)
+            setBankIntelligence(bank.bank_intelligence)
+            setGraphAnalysis(graph.graph_analysis)
+            setStressTestResults(stress.stress_test_results)
+            setAdvancedCredit(adv.advanced_credit)
+            setQualitativeScores(qual.qualitative_scores)
+            setLocalRiskDecision(local.local_risk_decision)
+
+            // Re-load the full session to ensure any z-scores or other backend updates are synced 
+            const sessionRes = await api.getSession(sessionId)
+            if (sessionRes.session.z_score_anomalies) {
+                setZScoreAnomalies(sessionRes.session.z_score_anomalies)
+            }
+
+            toast('Nashee Analytical Modules loaded')
+        } catch (e: any) {
+            setErrorFor('nashee', e.message)
+        } finally {
+            setLoadingFor('nashee', false)
+        }
+    }, [sessionId])
+
     const generateCAMAction = useCallback(async () => {
         setLoadingFor('cam', true)
         try {
@@ -259,6 +329,31 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
     }, [])
 
+    const fetchSessionsList = useCallback(async () => {
+        setLoadingFor('sessionsList', true)
+        try {
+            const res = await api.listSessions()
+            setSessionsList(res.sessions || [])
+        } catch (e: any) {
+            setErrorFor('sessionsList', e.message)
+        } finally {
+            setLoadingFor('sessionsList', false)
+        }
+    }, [])
+
+    const toggleTheme = useCallback(() => {
+        setTheme(prev => {
+            const nextTheme = prev === 'light' ? 'dark' : 'light'
+            const html = document.documentElement
+            if (nextTheme === 'dark') {
+                html.classList.add('dark')
+            } else {
+                html.classList.remove('dark')
+            }
+            return nextTheme
+        })
+    }, [])
+
     // ── Value ───────────────────────────────────────────────────────────────
 
     const value: AppContextType = {
@@ -266,12 +361,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
         ingestedDocs, financials, latestExtraction, richGstData,
         researchInsights, primaryNotes,
         fiveCsScores, camReport,
+        gstReconciliation, bankIntelligence, graphAnalysis, stressTestResults,
+        advancedCredit, qualitativeScores, localRiskDecision, zScoreAnomalies,
         creditScore, creditRating, recommendation, recommendedLimit, probabilityOfDefault,
-        isLoading, errors, toastMessage,
+        isLoading, errors, toastMessage, theme, sessionsList,
         saveEntity, ingestDocument: ingestDocumentAction,
         triggerResearch, savePrimaryInsights: savePrimaryInsightsAction,
-        computeFiveCs, generateCAM: generateCAMAction,
-        clearError, clearToast, loadSession,
+        computeFiveCs, fetchNasheeModules, generateCAM: generateCAMAction,
+        clearError, clearToast, loadSession, fetchSessionsList, toggleTheme,
     }
 
     return <AppContext.Provider value={value}>{children}</AppContext.Provider>

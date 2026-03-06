@@ -12,6 +12,11 @@ import os
 import re
 from dotenv import load_dotenv
 
+try:
+    from .document_ai.layout_parser import parse_document_layouts
+except ImportError:
+    parse_document_layouts = None
+
 load_dotenv()
 
 logger = logging.getLogger(__name__)
@@ -78,6 +83,11 @@ def detect_doc_type(filename: str, text: str) -> str:
 
     if any(k in fname for k in ['itr', 'income_tax', 'return']):
         return 'ITR'
+
+    if any(k in fname for k in ['sanction', 'loan', 'facility']):
+        return 'SANCTION_LETTER'
+    if any(k in text_lower for k in ['sanction letter', 'facility agreement', 'sanctioned amount']):
+        return 'SANCTION_LETTER'
 
     # Default for annual reports, board minutes, etc.
     return 'ANNUAL_REPORT'
@@ -261,6 +271,125 @@ Document Text:
 {text}
 """
 
+# ── Local RegEx / Keyword Extractions ────────────────────────────────────────
+
+def extract_unstructured_risk_signals(text: str) -> dict:
+    """Keyword scan for litigation/default/pledge/downgrade."""
+    text_lower = text.lower()
+    raw_sentences = text_lower.replace("\n", " ")
+    sentences = [s.strip() for s in raw_sentences.split(".") if s.strip()]
+
+    risk_keywords = {
+        "litigation": ["litigation", "suit filed", "court case", "arbitration"],
+        "default": ["default", "overdue", "npa", "non-performing"],
+        "pledge": ["pledge", "pledged shares", "encumbered"],
+        "downgrade": ["rating downgrade", "downgraded", "negative outlook"],
+    }
+
+    scores = {}
+    total_hits = 0
+    sample_sentences = {k: [] for k in risk_keywords}
+
+    for key, words in risk_keywords.items():
+        hits = 0
+        for sent in sentences:
+            if any(w in sent for w in words):
+                if "no " + key in sent or "without any " + key in sent:
+                    continue
+                hits += 1
+                if len(sample_sentences[key]) < 3:
+                    sample_sentences[key].append(sent.strip())
+        scores[f"{key}_hits"] = hits
+        total_hits += hits
+
+    litigation_hits = scores.get("litigation_hits", 0) + scores.get("default_hits", 0)
+    litigation_risk_score = min(1.0, litigation_hits / 10.0) if total_hits > 0 else 0.0
+
+    if litigation_risk_score == 0: severity = "NONE"
+    elif litigation_risk_score < 0.3: severity = "LOW"
+    elif litigation_risk_score < 0.7: severity = "MEDIUM"
+    else: severity = "HIGH"
+
+    return {
+        "unstructured_total_hits": total_hits,
+        "litigation_risk_score": float(litigation_risk_score),
+        "litigation_severity": severity,
+        "litigation_sample_sentences": sample_sentences.get("litigation", []),
+        "default_sample_sentences": sample_sentences.get("default", []),
+        "pledge_sample_sentences": sample_sentences.get("pledge", []),
+        "downgrade_sample_sentences": sample_sentences.get("downgrade", []),
+        **scores,
+    }
+
+def extract_sanction_features(text: str) -> dict:
+    """Regex extraction of loan terms, facility type, guarantee flags."""
+    lowered = text.lower()
+    
+    amount_patterns = [
+        r"(loan amount|sanction(?:ed)? amount|amount sanctioned)[^\d]{0,40}([\d,]+(?:\.\d+)?)",
+        r"amount of\s+rs\.?\s*([\d,]+(?:\.\d+)?)"
+    ]
+    loan_amount = None
+    for pat in amount_patterns:
+        m = re.search(pat, text, flags=re.IGNORECASE)
+        if m:
+            try:
+                loan_amount = float(m.group(2 if m.lastindex >= 2 else 1).replace(",", ""))
+                break
+            except ValueError:
+                pass
+
+    rate_patterns = [
+        r"(interest rate|roi)[^\d]{0,40}(\d{1,2}(?:\.\d+)?)\s*%",
+        r"(\d{1,2}(?:\.\d+)?)\s*%\s*(?:p\.?a\.?|per annum)"
+    ]
+    interest_rate = None
+    for pat in rate_patterns:
+        m = re.search(pat, text, flags=re.IGNORECASE)
+        if m:
+            try:
+                interest_rate = float(m.group(2 if m.lastindex >= 2 else 1))
+                break
+            except ValueError:
+                pass
+
+    tenure_months = None
+    for pat in [r"(tenure|tenor|loan period)[^\d]{0,40}(\d{1,3})\s*(months?|mths?)",
+                r"(tenure|tenor|loan period)[^\d]{0,40}(\d{1,2})\s*(years?|yrs?)"]:
+        m = re.search(pat, text, flags=re.IGNORECASE)
+        if m:
+            try:
+                num = int(m.group(2))
+                unit = m.group(3).lower()
+                tenure_months = num * 12 if "year" in unit or "yr" in unit else num
+                break
+            except ValueError:
+                pass
+
+    facility_type = next((t for t in ["Term Loan", "Cash Credit", "Overdraft", "Working Capital"] if t.lower() in lowered), None)
+    guarantee_type = next((t for t in ["JLG", "CGTMSE", "Collateral Free"] if t.lower() in lowered), None)
+
+    if loan_amount is None:
+        return {}
+        
+    features = {"sanction_loan_amount": float(loan_amount)}
+    if interest_rate: features["sanction_interest_rate"] = float(interest_rate)
+    if tenure_months: features["sanction_tenure_months"] = int(tenure_months)
+    if facility_type: features["sanction_facility_type"] = facility_type
+    if guarantee_type: features["sanction_guarantee_type"] = guarantee_type
+    
+    features["sanction_existing_debt"] = float(loan_amount)
+    if interest_rate is not None:
+        features["sanction_effective_rate"] = float(interest_rate)
+        features["sanction_high_interest_flag"] = interest_rate > 20.0
+    if tenure_months is not None:
+        features["sanction_short_tenure_flag"] = tenure_months <= 12
+
+    micro_flag = guarantee_type and guarantee_type.upper() == "JLG"
+    features["sanction_microfinance_exposure_flag"] = bool(micro_flag)
+    features["sanction_group_liability_flag"] = bool(micro_flag)
+
+    return features
 
 # ── PDF Text Extraction ─────────────────────────────────────────────────────
 
@@ -286,19 +415,37 @@ def process_document(filename: str, content: bytes) -> dict:
     """
     logger.info(f"Processing document {filename} ({len(content)} bytes)")
 
-    # 1. Extract text
+    # 1. Extract text and detect doc_type
     text = ""
+    doc_type = "UNKNOWN"
+    
     if filename.lower().endswith('.pdf'):
         text = extract_text_from_pdf(content)
+        doc_type = detect_doc_type(filename, text)
+        
+        # Advanced Layout parsing for dense table-heavy reports
+        if parse_document_layouts is not None and doc_type in ['ANNUAL_REPORT', 'BANK_STATEMENT', 'ITR']:
+            logger.info(f"Running Advanced ML Document Layout Parser on {filename}...")
+            import tempfile
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+                tmp.write(content)
+                tmp_path = tmp.name
+            try:
+                advanced_text = parse_document_layouts(tmp_path)
+                if advanced_text.strip():
+                    text = advanced_text
+            except Exception as e:
+                logger.warning(f"Advanced Document AI failed: {e}. Falling back to PyMuPDF.")
+            finally:
+                if os.path.exists(tmp_path):
+                    os.remove(tmp_path)
     else:
         text = content.decode('utf-8', errors='ignore')[:15000]
+        doc_type = detect_doc_type(filename, text)
 
     if not text.strip():
         logger.warning("No text extracted from document.")
         text = "Empty or unreadable document."
-
-    # 2. Detect document type
-    doc_type = detect_doc_type(filename, text)
     logger.info(f"Detected document type: {doc_type}")
 
     # 3. Select prompt
@@ -352,9 +499,23 @@ def process_document(filename: str, content: bytes) -> dict:
             
         elif doc_type == 'CIBIL':
             structured_data["_doc_type"] = "CIBIL"
+        elif doc_type == 'SANCTION_LETTER':
+            structured_data["_doc_type"] = "SANCTION_LETTER"
+            sanction_features = extract_sanction_features(text)
+            structured_data["sanction_features"] = sanction_features
         else:
             structured_data["_doc_type"] = doc_type
             structured_data.setdefault("metadata", {})["doc_type"] = doc_type
+
+        # Global unstructured risk scan
+        unstructured_risks = extract_unstructured_risk_signals(text)
+        structured_data["unstructured_risks"] = unstructured_risks
+        
+        # Merge high-level unstructured flags
+        if unstructured_risks.get("litigation_risk_score", 0.0) > 0.0:
+            if "flags" not in structured_data:
+                structured_data["flags"] = []
+            structured_data["flags"].append(f"Unstructured Risk: {unstructured_risks.get('litigation_severity')} severity")
 
         return structured_data
 

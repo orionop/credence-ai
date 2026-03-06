@@ -60,6 +60,15 @@ class Session:
     recommendation: str = ""  # "approved", "conditional", "rejected"
     recommended_limit: str = ""
     probability_of_default: str = ""
+    # Nashee analytical module outputs
+    gst_reconciliation: Dict[str, Any] = field(default_factory=dict)
+    bank_intelligence: Dict[str, Any] = field(default_factory=dict)
+    graph_analysis: Dict[str, Any] = field(default_factory=dict)
+    stress_test_results: List[Dict[str, Any]] = field(default_factory=list)
+    advanced_credit: Dict[str, Any] = field(default_factory=dict)
+    qualitative_scores: Dict[str, Any] = field(default_factory=dict)
+    local_risk_decision: Dict[str, Any] = field(default_factory=dict)
+    z_score_anomalies: Dict[str, Any] = field(default_factory=dict)
     # Timestamps
     created_at: str = field(default_factory=lambda: datetime.now().isoformat())
     updated_at: str = field(default_factory=lambda: datetime.now().isoformat())
@@ -107,17 +116,49 @@ def init_db():
             recommendation TEXT,
             recommended_limit TEXT,
             probability_of_default TEXT,
+            gst_reconciliation TEXT,
+            bank_intelligence TEXT,
+            graph_analysis TEXT,
+            stress_test_results TEXT,
+            advanced_credit TEXT,
+            qualitative_scores TEXT,
+            local_risk_decision TEXT,
+            z_score_anomalies TEXT,
             created_at TEXT,
             updated_at TEXT
         )
     """
     cursor.execute(query)
+
+    # Migrations for existing DBs — add new columns if missing
+    new_columns = [
+        "gst_reconciliation", "bank_intelligence", "graph_analysis",
+        "stress_test_results", "advanced_credit", "qualitative_scores",
+        "local_risk_decision", "z_score_anomalies",
+    ]
+    for col in new_columns:
+        try:
+            cursor.execute(f"ALTER TABLE sessions ADD COLUMN {col} TEXT")
+        except Exception:
+            pass  # Column already exists
+
     conn.commit()
     conn.close()
     logger.info(f"Initialized {'PostgreSQL' if IS_POSTGRES else 'SQLite'} database")
 
 # Call init on module load
 init_db()
+
+def _safe_json_load(val, default=None):
+    """Safely load JSON from a DB column, returning default on None/empty."""
+    if default is None:
+        default = {}
+    if val is None or val == '':
+        return default
+    try:
+        return json.loads(val)
+    except (json.JSONDecodeError, TypeError):
+        return default
 
 def _row_to_session(row) -> Session:
     # sqlite3.Row or psycopg2 RealDictCursor row behave like dicts
@@ -140,6 +181,14 @@ def _row_to_session(row) -> Session:
         recommendation=row['recommendation'],
         recommended_limit=row['recommended_limit'],
         probability_of_default=row['probability_of_default'],
+        gst_reconciliation=_safe_json_load(row.get('gst_reconciliation') if hasattr(row, 'get') else (row['gst_reconciliation'] if 'gst_reconciliation' in row.keys() else None)),
+        bank_intelligence=_safe_json_load(row.get('bank_intelligence') if hasattr(row, 'get') else (row['bank_intelligence'] if 'bank_intelligence' in row.keys() else None)),
+        graph_analysis=_safe_json_load(row.get('graph_analysis') if hasattr(row, 'get') else (row['graph_analysis'] if 'graph_analysis' in row.keys() else None)),
+        stress_test_results=_safe_json_load(row.get('stress_test_results') if hasattr(row, 'get') else (row['stress_test_results'] if 'stress_test_results' in row.keys() else None), []),
+        advanced_credit=_safe_json_load(row.get('advanced_credit') if hasattr(row, 'get') else (row['advanced_credit'] if 'advanced_credit' in row.keys() else None)),
+        qualitative_scores=_safe_json_load(row.get('qualitative_scores') if hasattr(row, 'get') else (row['qualitative_scores'] if 'qualitative_scores' in row.keys() else None)),
+        local_risk_decision=_safe_json_load(row.get('local_risk_decision') if hasattr(row, 'get') else (row['local_risk_decision'] if 'local_risk_decision' in row.keys() else None)),
+        z_score_anomalies=_safe_json_load(row.get('z_score_anomalies') if hasattr(row, 'get') else (row['z_score_anomalies'] if 'z_score_anomalies' in row.keys() else None)),
         created_at=row['created_at'],
         updated_at=row['updated_at']
     )
@@ -157,8 +206,11 @@ def create_session(entity_name: str = "", **kwargs) -> Session:
             ingested_docs, financials, rich_gst_data, research_insights,
             primary_notes, five_cs_scores, cam_report, credit_score,
             credit_rating, recommendation, recommended_limit,
-            probability_of_default, created_at, updated_at
-        ) VALUES ({','.join([p]*20)})
+            probability_of_default, gst_reconciliation, bank_intelligence,
+            graph_analysis, stress_test_results, advanced_credit,
+            qualitative_scores, local_risk_decision, z_score_anomalies,
+            created_at, updated_at
+        ) VALUES ({','.join([p]*28)})
     """, (
         session.id, session.entity_name, session.cin_gstin, session.sector,
         session.facility_type, session.requested_loan_amount,
@@ -174,6 +226,14 @@ def create_session(entity_name: str = "", **kwargs) -> Session:
         session.recommendation,
         session.recommended_limit,
         session.probability_of_default,
+        json.dumps(session.gst_reconciliation),
+        json.dumps(session.bank_intelligence),
+        json.dumps(session.graph_analysis),
+        json.dumps(session.stress_test_results),
+        json.dumps(session.advanced_credit),
+        json.dumps(session.qualitative_scores),
+        json.dumps(session.local_risk_decision),
+        json.dumps(session.z_score_anomalies),
         session.created_at,
         session.updated_at
     ))
@@ -222,7 +282,11 @@ def update_session(session_id: str, **kwargs) -> Optional[Session]:
             rich_gst_data = {p}, research_insights = {p}, primary_notes = {p},
             five_cs_scores = {p}, cam_report = {p}, credit_score = {p},
             credit_rating = {p}, recommendation = {p}, recommended_limit = {p},
-            probability_of_default = {p}, updated_at = {p}
+            probability_of_default = {p}, gst_reconciliation = {p},
+            bank_intelligence = {p}, graph_analysis = {p},
+            stress_test_results = {p}, advanced_credit = {p},
+            qualitative_scores = {p}, local_risk_decision = {p},
+            z_score_anomalies = {p}, updated_at = {p}
         WHERE id = {p}
     """, (
         session.entity_name, session.cin_gstin, session.sector,
@@ -239,6 +303,14 @@ def update_session(session_id: str, **kwargs) -> Optional[Session]:
         session.recommendation,
         session.recommended_limit,
         session.probability_of_default,
+        json.dumps(session.gst_reconciliation),
+        json.dumps(session.bank_intelligence),
+        json.dumps(session.graph_analysis),
+        json.dumps(session.stress_test_results),
+        json.dumps(session.advanced_credit),
+        json.dumps(session.qualitative_scores),
+        json.dumps(session.local_risk_decision),
+        json.dumps(session.z_score_anomalies),
         session.updated_at,
         session.id
     ))
@@ -283,6 +355,14 @@ def session_to_dict(session: Session) -> dict:
         "recommendation": session.recommendation,
         "recommended_limit": session.recommended_limit,
         "probability_of_default": session.probability_of_default,
+        "gst_reconciliation": session.gst_reconciliation,
+        "bank_intelligence": session.bank_intelligence,
+        "graph_analysis": session.graph_analysis,
+        "stress_test_results": session.stress_test_results,
+        "advanced_credit": session.advanced_credit,
+        "qualitative_scores": session.qualitative_scores,
+        "local_risk_decision": session.local_risk_decision,
+        "z_score_anomalies": session.z_score_anomalies,
         "created_at": session.created_at,
         "updated_at": session.updated_at,
     }

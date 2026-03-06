@@ -1,207 +1,157 @@
 # CredenceAI
 
-**AI-Powered Credit Appraisal Engine for Indian Corporate Lending**
+**AI-Powered Credit Decisioning Engine for Indian Corporate Lending**
 
-CredenceAI automates the Credit Appraisal Memo (CAM) preparation pipeline — ingesting structured and unstructured financial documents, running autonomous research agents for market intelligence, and producing explainable credit recommendations using the Five Cs of Credit framework.
+CredenceAI automates the end-to-end Credit Appraisal Memo (CAM) pipeline — ingesting multi-format financial documents, running autonomous research agents for market and legal intelligence, performing deep analytical scoring with ML models, and producing explainable credit recommendations using the Five Cs of Credit framework.
 
-Built for the "Intelli-Credit" hackathon challenge: *Next-Gen Corporate Credit Appraisal — Bridging the Intelligence Gap*.
+Built for the **"Intelli-Credit" Hackathon Challenge**: *Next-Gen Corporate Credit Appraisal — Bridging the Intelligence Gap*.
 
 ---
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    React Frontend (Vite)                  │
-│  Dashboard │ Entity Ingestion │ Risk Intel │ Five Cs     │
-│  Appraisal Memo │ GST Reconciliation Hub                 │
-└──────────────────────┬──────────────────────────────────┘
-                       │ REST API
-┌──────────────────────┴──────────────────────────────────┐
-│                  FastAPI Backend (Python)                 │
-│                                                          │
-│  ┌─────────────┐  ┌──────────────┐  ┌────────────────┐  │
-│  │  Ingestor   │  │ Research     │  │ Scoring Engine │  │
-│  │  (Gemini +  │  │ Agent        │  │ (Five Cs +     │  │
-│  │   PyMuPDF)  │  │ (Tavily API) │  │  Risk Tiers)   │  │
-│  └─────────────┘  └──────────────┘  └────────────────┘  │
-│  ┌─────────────┐  ┌──────────────┐  ┌────────────────┐  │
-│  │  Session    │  │ CAM          │  │ PD → Score     │  │
-│  │  Manager    │  │ Generator    │  │ Converter      │  │
-│  │  (In-Memory)│  │ (GPT-4)     │  │ (Logit → 900)  │  │
-│  └─────────────┘  └──────────────┘  └────────────────┘  │
-└─────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────┐
+│                    React Frontend (Vite + Tailwind)               │
+│  Dashboard │ Entity Ingestion │ Risk Intelligence │ Five Cs      │
+│  Appraisal Memo │ GST Reconciliation │ Graph Analysis           │
+└──────────────────────────┬───────────────────────────────────────┘
+                           │ REST API (v1)
+┌──────────────────────────┴───────────────────────────────────────┐
+│                     FastAPI Backend (Python)                      │
+│                                                                   │
+│  ┌──────────────────┐  ┌──────────────────┐  ┌────────────────┐ │
+│  │  Document AI      │  │ Research Agent   │  │ Scoring Engine │ │
+│  │  Gemini 1.5 Flash │  │ Tavily + MCA    │  │ Five Cs + PD   │ │
+│  │  + Table          │  │ + e-Courts      │  │ Risk Tiers     │ │
+│  │    Transformer    │  │   Simulation    │  │                │ │
+│  │  + EasyOCR        │  │                 │  │                │ │
+│  └──────────────────┘  └──────────────────┘  └────────────────┘ │
+│  ┌──────────────────┐  ┌──────────────────┐  ┌────────────────┐ │
+│  │ Graph Analysis   │  │ CAM Generator   │  │ Anomaly        │ │
+│  │ NetworkX + GNN   │  │ GPT-4 Turbo    │  │ Detector       │ │
+│  │ (GraphSAGE)      │  │                 │  │ Isolation      │ │
+│  │                   │  │                 │  │ Forest +       │ │
+│  │                   │  │                 │  │ Z-Score        │ │
+│  └──────────────────┘  └──────────────────┘  └────────────────┘ │
+│  ┌──────────────────┐  ┌──────────────────┐  ┌────────────────┐ │
+│  │ GST              │  │ Bank            │  │ Stress Test    │ │
+│  │ Reconciliation   │  │ Intelligence    │  │ Engine         │ │
+│  └──────────────────┘  └──────────────────┘  └────────────────┘ │
+│  ┌──────────────────┐  ┌──────────────────┐  ┌────────────────┐ │
+│  │ Advanced Credit  │  │ Qualitative     │  │ Local Risk     │ │
+│  │ (CIBIL Scoring)  │  │ Inputs          │  │ Policy Engine  │ │
+│  └──────────────────┘  └──────────────────┘  └────────────────┘ │
+│                                                                   │
+│                     SQLite Persistence Layer                      │
+└──────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Supported Inputs
+## Core Capabilities
 
-| Category | Document Types |
-|----------|---------------|
-| **Structured Data** | GSTR-1 / 2A / 3B, Bank Statements, ITRs |
-| **Unstructured Data** | Annual Reports, Board Minutes, Rating Agency Reports, Sanction Letters, Legal Notices |
-| **Direct UI Inputs** | Company Name, Sector, Requested Loan Amount, Credit Officer Field Notes |
-| **Advanced Credit Data** | CIBIL Commercial Report (PDF), EPFO Statements, Related Party Ledgers |
+### Pillar 1: The Data Ingestor (Multi-Format Document AI)
 
-### Document AI Pipeline
+| Document Type | Extraction Method | Key Outputs |
+|---|---|---|
+| **GST Returns** (GSTR-1/2A/3B) | Gemini 1.5 Flash | Turnover, ITC variance, cash tax ratios, circular trading flags |
+| **CIBIL Commercial Reports** | Gemini 1.5 Flash | CCR Rank, DPD history, suit filed status, wilful default flags |
+| **Bank Statements** | Gemini + Table Transformer | Cash flows, transaction patterns, opening/closing balances |
+| **Annual Reports** | Table Transformer + EasyOCR | Revenue growth, EBITDA, debt-to-equity, auditor flags |
+| **ITR Filings** | Gemini 1.5 Flash | Income breakdowns, tax compliance status |
+| **Sanction Letters** | Gemini 1.5 Flash | Existing debt, interest rates, tenure, guarantee types |
 
-The ingestor uses **Google Gemini 1.5 Flash** as the primary extraction engine with automatic document type detection:
+**Advanced Document AI**: For table-heavy PDFs (Annual Reports, Bank Statements, ITRs), the system uses Microsoft's **Table Transformer** for table detection and **EasyOCR** for layout-preserving text extraction, with automatic fallback to PyMuPDF.
 
-- **GST Compliance Statements** → Rich schema: turnover, ITC variance, cash tax ratios, risk flags, document risk exposures
-- **CIBIL Commercial Reports** → CCR Rank, DPD history, suit filed status, wilful default flags
-- **Annual Reports / Financials** → Revenue growth, EBITDA margin, debt-to-equity, auditor flags
-- **Bank Statements** → Opening/closing balances, transaction patterns
-
-Falls back to OpenAI GPT-3.5 if Gemini is unavailable.
+**Behavioral Risk Math**: Post-extraction, the system computes deterministic risk indicators locally (ITC utilization ratio, cash-to-ITC ratio, mismatch flags) to avoid LLM math hallucinations. An **Isolation Forest** anomaly detector flags statistical outliers in GST-vs-Bank cross-reconciliation.
 
 ---
 
-## API Documentation
+### Pillar 2: The Research Agent (Digital Credit Manager)
 
-Base URL: `http://localhost:8080`
-
-### Core Endpoints
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/` | Health check — returns service status and version |
-| `POST` | `/api/v1/entity` | Create entity profile with loan amount and initialize session |
-| `GET` | `/api/v1/session/{id}` | Retrieve full session state by ID |
-| `GET` | `/api/v1/sessions` | List all active sessions |
-| `POST` | `/api/v1/ingest` | Upload and parse financial documents (PDF/CSV) |
-| `POST` | `/api/v1/research` | Trigger the autonomous research agent for market/legal intelligence |
-| `POST` | `/api/v1/primary-insights` | Save credit officer field notes and due diligence observations |
-| `GET` | `/api/v1/five-cs/{id}` | Compute Five Cs credit scores with AI-generated explanations |
-| `POST` | `/api/v1/generate-cam` | Generate the full Credit Appraisal Memo (Markdown) |
-
-### Request/Response Examples
-
-#### Create Entity
-```bash
-curl -X POST http://localhost:8080/api/v1/entity \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "entity_name": "GlobalForge Industries Pvt Ltd",
-    "cin_gstin": "27AAHCG4589Q1ZK",
-    "sector": "Manufacturing & Heavy Industries",
-    "facility_type": "Term Loan",
-    "requested_loan_amount": "50,00,00,000"
-  }'
-```
-
-#### Ingest Document
-```bash
-curl -X POST http://localhost:8080/api/v1/ingest \
-  -F "file=@gst_compliance_statement.pdf" \
-  -F "session_id=abc123"
-```
-
-#### Run Research Agent
-```bash
-curl -X POST http://localhost:8080/api/v1/research \
-  -H 'Content-Type: application/json' \
-  -d '{"session_id": "abc123", "company_name": "GlobalForge Industries", "industry": "Manufacturing"}'
-```
-
-#### Compute Five Cs
-```bash
-curl http://localhost:8080/api/v1/five-cs/abc123
-```
+| Source | Method | Output |
+|---|---|---|
+| **Web News** | Tavily API (live search) | Sector headwinds, promoter news, litigation alerts |
+| **MCA Registry** | Simulated fetch | CIN, incorporation date, compliance status, director count, paid-up capital |
+| **e-Courts Portal** | Simulated fetch | NCLT insolvency petitions, commercial suit recovery cases |
+| **Primary Insights** | Credit Officer UI input | Qualitative field notes integrated into risk scoring |
 
 ---
 
-## Algorithm Documentation
+### Pillar 3: The Recommendation Engine
 
-### 1. Document Ingestion Pipeline
+#### Five Cs Scoring (Hybrid AI + Deterministic)
 
-**Input**: PDF/CSV financial filings (GST returns, ITRs, bank statements, annual reports, CIBIL reports)
+The LLM evaluates the entity across five dimensions:
 
-**Process**:
-1. **Text Extraction** — PyMuPDF extracts raw text from uploaded PDFs
-2. **Document Type Detection** — Heuristic classifier identifies GST / CIBIL / Bank Statement / Annual Report from filename + content keywords
-3. **Specialized LLM Parsing** — Gemini 1.5 Flash uses document-specific prompts to extract structured JSON:
-   - GST → `company_financials`, `gst_behavioral_cash_metrics`, `document_risks`, `gst_risk_features`
-   - CIBIL → `ccr_rank`, `payment_history`, `dpd_counts`, `suit_filed_amount`
-   - General → `revenue_yoy_growth`, `ebitda_margin`, `debt_to_equity`, `flags`
-4. **Session Enrichment** — Parsed financials and rich GST data are merged into the active session state
-
-**Output**: Structured JSON with numeric fields, risk flags, and full GST behavioral metrics
-
----
-
-### 2. Autonomous Research Agent
-
-**Input**: Entity name and industry sector
-
-**Process**:
-1. **Query Construction** — Builds targeted search queries for: litigation risk, sector headwinds, regulatory changes, promoter track record, and MCA filings
-2. **Web Intelligence** — Tavily API performs real-time web search and returns summarized results
-3. **Result Structuring** — Raw search results are parsed into titled insight cards with source attribution, timestamps, and sentiment tags
-
-**Output**: Array of `ResearchInsight` objects (title, content, source, sentiment, timestamp)
-
----
-
-### 3. Five Cs Scoring Engine
-
-A hybrid AI + deterministic scoring system that evaluates corporate creditworthiness.
-
-#### Stage 1: AI-Powered Five Cs Evaluation (GPT-3.5)
-
-The LLM evaluates the entity across five dimensions using all available data:
-
-| Dimension | Key Metrics Assessed |
-|-----------|---------------------|
-| **Character** | Promoter track record, governance quality, litigation history |
-| **Capacity** | DSCR, interest coverage ratio, EBITDA margin, cash flow trends |
-| **Capital** | Debt-to-equity ratio, net worth, capital adequacy |
-| **Collateral** | Security coverage, asset quality, collateral marketability |
+| Dimension | Key Metrics |
+|---|---|
+| **Character** | Promoter track record, governance, litigation history |
+| **Capacity** | DSCR, interest coverage, EBITDA margin, cash flows |
+| **Capital** | Debt-to-equity, net worth, capital adequacy |
+| **Collateral** | Security coverage, asset quality, marketability |
 | **Conditions** | Sector outlook, regulatory environment, macro headwinds |
 
-Each dimension receives a **score (0-100)**, summary, detailed explanation, and key driving factors.
-
-#### Stage 2: Deterministic Risk Framework
-
-The AI-estimated Probability of Default (PD) feeds into a rule-based tier assignment:
+#### Risk Tier Assignment
 
 | PD Range | Rating | Recommendation | Risk Premium |
-|----------|--------|----------------|--------------|
-| 0-2% | AAA | Approved | 0.75% |
-| 2-5% | AA+ | Approved | 1.25% |
-| 5-8% | AA | Approved | 1.75% |
-| 8-12% | A+ | Approved | 2.25% |
-| 12-18% | A | Conditional | 2.75% |
-| 18-25% | BBB+ | Conditional | 3.50% |
-| 25-35% | BBB | Conditional | 4.50% |
-| 35-50% | BB | Rejected | 6.00% |
-| 50-100% | B/CCC | Rejected | 8.00% |
+|---|---|---|---|
+| 0–2% | AAA | Approved | 0.75% |
+| 2–5% | AA+ | Approved | 1.25% |
+| 5–8% | AA | Approved | 1.75% |
+| 8–12% | A+ | Approved | 2.25% |
+| 12–18% | A | Conditional | 2.75% |
+| 18–25% | BBB+ | Conditional | 3.50% |
+| 25–35% | BBB | Conditional | 4.50% |
+| 35–50% | BB | Rejected | 6.00% |
+| 50–100% | B/CCC | Rejected | 8.00% |
 
-#### PD → Commercial Score Conversion
+#### CAM Generation (GPT-4 Turbo)
 
-```
-score = 300 + 600 × clip((−log(PD / (1−PD)) + 6) / 12, 0, 1)
-```
-
-Maps PD to a **300-900 CIBIL-like commercial score** via logit transform.
-
-#### Sanction Limit Calculation
-
-```
-recommended_limit = requested_amount × sanction_pct[rating]
-```
-
-Where `sanction_pct` ranges from 100% (AAA) to 0% (BB and below).
+Produces a professional Credit Appraisal Memo following Indian banking standards — structured by the Five Cs, with executive summary, risk assessment, sanction amount recommendation, risk-adjusted pricing (MCLR + spread), and covenants.
 
 ---
 
-### 4. CAM Generator
+## Advanced Analytical Modules
 
-**Input**: Structured financials + research insights + field notes + Five Cs scores
+| Module | Technology | Purpose |
+|---|---|---|
+| **GST Reconciliation** | Deterministic math | GSTR-2A vs 3B variance, ITC dependency ratios, supplier concentration |
+| **Bank Intelligence** | Heuristic analysis | Cash flow patterns, related party detection, velocity analysis |
+| **Transaction Graph** | NetworkX + GraphSAGE (PyTorch Geometric) | Entity relationship mapping, cycle detection, GNN-based anomaly scoring |
+| **Stress Testing** | Scenario engine | Revenue/EBITDA shock scenarios (10%, 20%, 30% decline) with DSCR impact |
+| **Advanced Credit** | CIBIL proxy scoring | Weighted composite from repayment history, utilization, account age |
+| **Qualitative Scoring** | Weighted rubric | Management quality, governance, industry position |
+| **Local Risk Policy** | JSON-configurable `risk_policy.json` | Policy-driven rule engine with threshold-based overrides |
+| **Z-Score Anomaly Detection** | Statistical analysis | Flags outliers across financial metrics using z-score thresholds |
 
-**Process**: GPT-4 synthesizes all data into a professional Credit Appraisal Memo following Indian banking standards, structured by the Five Cs framework.
+---
 
-**Output**: Markdown-formatted CAM with executive summary, Five Cs analysis, risk assessment, and final underwriting recommendation.
+## API Reference
+
+Base URL: `http://localhost:8000`
+
+### Endpoints
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/` | Health check |
+| `POST` | `/api/v1/entity` | Create entity profile and initialize session |
+| `GET` | `/api/v1/session/{id}` | Retrieve full session state |
+| `GET` | `/api/v1/sessions` | List all sessions |
+| `POST` | `/api/v1/ingest` | Upload and parse documents (PDF/CSV) |
+| `POST` | `/api/v1/research` | Run autonomous research agent |
+| `POST` | `/api/v1/primary-insights` | Save credit officer field notes |
+| `GET` | `/api/v1/five-cs/{id}` | Compute Five Cs credit scores |
+| `POST` | `/api/v1/generate-cam` | Generate Credit Appraisal Memo |
+| `GET` | `/api/v1/gst-reconciliation/{id}` | GST variance analysis |
+| `GET` | `/api/v1/bank-intelligence/{id}` | Bank flow intelligence |
+| `GET` | `/api/v1/graph-analysis/{id}` | Transaction graph + GNN scoring |
+| `GET` | `/api/v1/stress-test/{id}` | Stress test scenarios |
+| `GET` | `/api/v1/advanced-credit/{id}` | CIBIL proxy credit scoring |
+| `GET` | `/api/v1/qualitative-scoring/{id}` | Management quality assessment |
+| `GET` | `/api/v1/local-risk-decision/{id}` | Policy-driven risk decision |
 
 ---
 
@@ -210,9 +160,9 @@ Where `sanction_pct` ranges from 100% (AAA) to 0% (BB and below).
 ```bash
 # Backend
 cd backend
-cp .env.example .env  # Add your API keys (OpenAI, Tavily, Google AI Studio)
+cp .env.example .env   # Add: GOOGLE_API_KEY, OPENAI_API_KEY, TAVILY_API_KEY
 pip install -r requirements.txt
-uvicorn main:app --port 8080 --reload
+uvicorn main:app --port 8000 --reload
 
 # Frontend
 cd frontend
@@ -222,18 +172,66 @@ npm run dev
 
 Open `http://localhost:5173` in your browser.
 
+### Environment Variables
+
+| Variable | Required | Purpose |
+|---|---|---|
+| `GOOGLE_API_KEY` | Yes | Gemini 1.5 Flash (primary document parser) |
+| `OPENAI_API_KEY` | Yes | GPT-4 Turbo (CAM generation), GPT-3.5 (scoring fallback) |
+| `TAVILY_API_KEY` | Recommended | Live web search for research agent |
+
 ---
 
 ## Tech Stack
 
 | Layer | Technology |
-|-------|-----------|
-| Frontend | React 19, TypeScript, Vite, Tailwind CSS |
-| Backend | FastAPI, Python 3.9+, Uvicorn |
-| Document AI | Google Gemini 1.5 Flash (primary), OpenAI GPT-3.5 (fallback) |
-| CAM Generation | OpenAI GPT-4, LangChain |
-| Research | Tavily API (web intelligence) |
-| PDF Parsing | PyMuPDF, Pandas |
+|---|---|
+| **Frontend** | React 19, TypeScript, Vite, Tailwind CSS |
+| **Backend** | FastAPI, Python 3.9+, Uvicorn, SQLite |
+| **Document AI** | Google Gemini 1.5 Flash, Microsoft Table Transformer, EasyOCR, PyMuPDF |
+| **CAM Generation** | OpenAI GPT-4 Turbo, LangChain |
+| **Research** | Tavily API, MCA simulation, e-Courts simulation |
+| **ML Models** | PyTorch, PyTorch Geometric (GraphSAGE), scikit-learn (Isolation Forest) |
+| **Graph Analysis** | NetworkX, Matplotlib |
+
+---
+
+## Project Structure
+
+```
+credence-ai/
+├── backend/
+│   ├── main.py                     # FastAPI app + all API endpoints
+│   ├── services/
+│   │   ├── ingestor.py             # Document AI pipeline (Gemini + Table Transformer)
+│   │   ├── agent.py                # Research agent (Tavily + MCA + e-Courts)
+│   │   ├── scoring.py              # Five Cs + PD scoring engine
+│   │   ├── cam_generator.py        # GPT-4 CAM generation
+│   │   ├── session.py              # SQLite persistence layer
+│   │   ├── anomaly_detector.py     # Isolation Forest + Z-score detection
+│   │   ├── graph_analysis.py       # NetworkX graph + GNN integration
+│   │   ├── gnn_model.py            # PyTorch Geometric GraphSAGE
+│   │   ├── gst_reconciliation.py   # GST variance analysis
+│   │   ├── bank_intelligence.py    # Bank flow analysis
+│   │   ├── stress_test.py          # Revenue/EBITDA stress scenarios
+│   │   ├── advanced_credit.py      # CIBIL proxy scoring
+│   │   ├── qualitative_inputs.py   # Management quality scoring
+│   │   └── document_ai/
+│   │       └── layout_parser.py    # Table Transformer + EasyOCR
+│   └── data/
+│       └── risk_policy.json        # Configurable risk policy thresholds
+├── frontend/
+│   └── src/
+│       ├── App.tsx                  # Main app shell with all views
+│       ├── AppContext.tsx           # Global state management
+│       ├── api.ts                  # Backend API client
+│       ├── RiskIntelligenceView.tsx # Graph + research visualization
+│       ├── FiveCsAnalysisView.tsx   # Radar chart + score breakdown
+│       └── EntityIngestionView.tsx  # Document upload interface
+└── reference/
+    ├── intelli-credit-engine/       # Original upstream prototype source
+    └── anomaly-models/              # Pre-trained Isolation Forest model
+```
 
 ---
 
@@ -241,6 +239,6 @@ Open `http://localhost:5173` in your browser.
 
 MIT — see [LICENSE](LICENSE)
 
-## Author
+## Authors
 
-**Anurag Shetye** — [@orionop](https://github.com/orionop)
+**Yash Patil** · **Anurag Shetye** — Team Godspeed

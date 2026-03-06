@@ -12,116 +12,262 @@ function App() {
     const [activeSidebarItem, setActiveSidebarItem] = useState('dashboard')
     const app = useApp()
 
-    return (
-        <div className="bg-background-light dark:bg-background-dark font-display text-slate-900 dark:text-slate-100">
-            <div className="flex min-h-screen">
+    const [isSearchOpen, setIsSearchOpen] = useState(false)
+    const [isNotificationsOpen, setIsNotificationsOpen] = useState(false)
+    const [isSettingsOpen, setIsSettingsOpen] = useState(false)
 
-                {/* ═══════════════════════════════════════════════════════════════ */}
-                {/* SIDEBAR                                                       */}
-                {/* ═══════════════════════════════════════════════════════════════ */}
-                <aside className="w-64 border-r border-primary/10 bg-background-light dark:bg-background-dark flex flex-col shrink-0">
-                    <div className="p-6 flex items-center gap-3">
-                        <div className="size-10 bg-primary rounded-lg flex items-center justify-center text-background-dark">
-                            <span className="material-symbols-outlined">account_balance</span>
+    // Close dropdowns when clicking outside
+    const closeAllDropdowns = () => {
+        setIsSearchOpen(false)
+        setIsNotificationsOpen(false)
+        setIsSettingsOpen(false)
+    }
+
+    return (
+        <div className="bg-background-light dark:bg-background-dark font-display text-slate-900 dark:text-slate-100 min-h-screen flex" onClick={closeAllDropdowns}>
+            {/* ═══════════════════════════════════════════════════════════════ */}
+            {/* SIDEBAR                                                       */}
+            {/* ═══════════════════════════════════════════════════════════════ */}
+            <aside
+                className="w-64 border-r border-primary/10 bg-background-light dark:bg-background-dark flex flex-col shrink-0 relative z-10"
+            >
+                <div className="p-6 flex items-center gap-3">
+                    <div className="size-10 bg-primary rounded-lg flex items-center justify-center text-background-dark">
+                        <span className="material-symbols-outlined">account_balance</span>
+                    </div>
+                    <div>
+                        <h1 className="serif-heading text-xl font-bold tracking-tight text-primary">CredenceAI</h1>
+                        <p className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold uppercase tracking-widest">Institutional Banking</p>
+                    </div>
+                </div>
+
+                <nav className="flex-1 px-4 py-4 space-y-1">
+                    {[
+                        { id: 'dashboard', icon: 'dashboard', label: 'Dashboard', view: 'dashboard' as ViewType },
+                        { id: 'entity', icon: 'settings_input_component', label: 'Entity & Ingestion', view: 'entity' as ViewType },
+                        { id: 'risk', icon: 'account_tree', label: 'Risk Intelligence', view: 'risk' as ViewType },
+                        { id: 'appraisal', icon: 'article', label: 'Appraisal Memo', view: 'appraisal' as ViewType },
+                        { id: 'gst', icon: 'receipt_long', label: 'GST Reconciliation', view: 'gst' as ViewType },
+                        { id: 'fivecs', icon: 'analytics', label: 'Five Cs Analysis', view: 'fivecs' as ViewType },
+                    ].map((item) => (
+                        <button
+                            key={item.id}
+                            onClick={() => { setActiveSidebarItem(item.id); setCurrentView(item.view); }}
+                            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors font-medium text-left ${activeSidebarItem === item.id
+                                ? 'bg-primary/10 text-primary font-semibold border border-primary/20'
+                                : 'text-slate-500 dark:text-slate-400 hover:bg-primary/5 hover:text-primary'
+                                }`}
+                        >
+                            <span className="material-symbols-outlined">{item.icon}</span>
+                            <span className="text-sm">{item.label}</span>
+                        </button>
+                    ))}
+                </nav>
+
+                {/* Session Info */}
+                <div className="px-4 py-3 border-t border-primary/10">
+                    {app.sessionId ? (
+                        <div className="p-2 bg-primary/5 rounded-lg">
+                            <p className="text-[10px] text-primary font-bold uppercase tracking-widest">Active Session</p>
+                            <p className="text-xs font-bold truncate mt-0.5">{app.entityName || 'Unnamed'}</p>
+                            <p className="text-[10px] text-slate-500 font-mono">{app.sessionId}</p>
                         </div>
-                        <div>
-                            <h1 className="serif-heading text-xl font-bold tracking-tight text-primary">CredenceAI</h1>
-                            <p className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold uppercase tracking-widest">Institutional Banking</p>
+                    ) : (
+                        <p className="text-[10px] text-slate-500 italic text-center">No active session</p>
+                    )}
+                </div>
+
+                <div className="p-4 border-t border-primary/10">
+                    <div className="flex items-center gap-3 p-2 rounded-lg bg-primary/5">
+                        <div className="size-10 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold text-sm">MS</div>
+                        <div className="overflow-hidden">
+                            <p className="text-xs font-bold truncate">Marcus Sterling</p>
+                            <p className="text-[10px] text-slate-500 uppercase tracking-widest truncate">Lead Credit Analyst</p>
                         </div>
                     </div>
+                </div>
+            </aside>
 
-                    <nav className="flex-1 px-4 py-4 space-y-1">
-                        {[
-                            { id: 'dashboard', icon: 'dashboard', label: 'Dashboard', view: 'dashboard' as ViewType },
-                            { id: 'entity', icon: 'settings_input_component', label: 'Entity & Ingestion', view: 'entity' as ViewType },
-                            { id: 'risk', icon: 'account_tree', label: 'Risk Intelligence', view: 'risk' as ViewType },
-                            { id: 'appraisal', icon: 'article', label: 'Appraisal Memo', view: 'appraisal' as ViewType },
-                            { id: 'gst', icon: 'receipt_long', label: 'GST Reconciliation', view: 'gst' as ViewType },
-                            { id: 'fivecs', icon: 'analytics', label: 'Five Cs Analysis', view: 'fivecs' as ViewType },
-                        ].map((item) => (
-                            <button
-                                key={item.id}
-                                onClick={() => { setActiveSidebarItem(item.id); setCurrentView(item.view); }}
-                                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors font-medium text-left ${activeSidebarItem === item.id
-                                    ? 'bg-primary/10 text-primary font-semibold border border-primary/20'
-                                    : 'text-slate-500 dark:text-slate-400 hover:bg-primary/5 hover:text-primary'
-                                    }`}
-                            >
-                                <span className="material-symbols-outlined">{item.icon}</span>
-                                <span className="text-sm">{item.label}</span>
-                            </button>
-                        ))}
-                    </nav>
+            {/* ═══════════════════════════════════════════════════════════════ */}
+            {/* MAIN CONTENT                                                   */}
+            {/* ═══════════════════════════════════════════════════════════════ */}
+            <main className="flex-1 flex flex-col min-w-0">
 
-                    {/* Session Info */}
-                    <div className="px-4 py-3 border-t border-primary/10">
-                        {app.sessionId ? (
-                            <div className="p-2 bg-primary/5 rounded-lg">
-                                <p className="text-[10px] text-primary font-bold uppercase tracking-widest">Active Session</p>
-                                <p className="text-xs font-bold truncate mt-0.5">{app.entityName || 'Unnamed'}</p>
-                                <p className="text-[10px] text-slate-500 font-mono">{app.sessionId}</p>
+                {/* Header */}
+                <header className="h-16 border-b border-primary/10 bg-background-light/50 dark:bg-background-dark/50 backdrop-blur-md flex items-center justify-between px-8 shrink-0 relative z-20">
+                    <div className="flex items-center flex-1 max-w-xl relative" onClick={e => e.stopPropagation()}>
+                        <div className="relative w-full">
+                            <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-lg">search</span>
+                            <input
+                                className="w-full bg-primary/5 border border-primary/10 rounded-lg pl-10 pr-4 py-2 text-sm focus:ring-1 focus:ring-primary focus:border-primary focus:outline-none"
+                                placeholder="Search entities & sessions..."
+                                type="text"
+                                onFocus={() => {
+                                    closeAllDropdowns()
+                                    setIsSearchOpen(true)
+                                    app.fetchSessionsList()
+                                }}
+                                onClick={e => e.stopPropagation()}
+                            />
+                        </div>
+
+                        {/* Search Dropdown (Session Switcher) */}
+                        {isSearchOpen && (
+                            <div className="absolute top-full left-0 mt-2 w-full bg-background-light dark:bg-slate-800 border border-primary/20 rounded-lg shadow-xl overflow-hidden max-h-96 overflow-y-auto">
+                                <div className="p-3 border-b border-primary/10 bg-primary/5">
+                                    <p className="text-xs font-bold text-primary uppercase tracking-wider">Recent Sessions</p>
+                                </div>
+                                {app.isLoading.sessionsList ? (
+                                    <div className="p-4 text-center text-slate-500 text-sm">Loading sessions...</div>
+                                ) : app.sessionsList.length > 0 ? (
+                                    <div className="py-2">
+                                        {app.sessionsList.map(s => (
+                                            <button
+                                                key={s.id}
+                                                onClick={() => {
+                                                    app.loadSession(s.id)
+                                                    setIsSearchOpen(false)
+                                                }}
+                                                className={`w-full text-left px-4 py-3 hover:bg-primary/5 border-b border-primary/5 last:border-0 ${app.sessionId === s.id ? 'bg-primary/10' : ''}`}
+                                            >
+                                                <div className="flex justify-between items-start">
+                                                    <div>
+                                                        <p className="font-bold text-sm text-primary">{s.entity_name || 'Unnamed Entity'}</p>
+                                                        <p className="text-xs text-slate-500">{s.sector} • {s.facility_type}</p>
+                                                    </div>
+                                                    <span className="text-[10px] font-mono text-slate-400 bg-slate-100 dark:bg-slate-700 px-2 py-0.5 rounded">{s.id.substring(0, 8)}</span>
+                                                </div>
+                                            </button>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="p-4 text-center text-slate-500 text-sm">No historical sessions found.</div>
+                                )}
                             </div>
-                        ) : (
-                            <p className="text-[10px] text-slate-500 italic text-center">No active session</p>
                         )}
                     </div>
 
-                    <div className="p-4 border-t border-primary/10">
-                        <div className="flex items-center gap-3 p-2 rounded-lg bg-primary/5">
-                            <div className="size-10 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold text-sm">MS</div>
-                            <div className="overflow-hidden">
-                                <p className="text-xs font-bold truncate">Marcus Sterling</p>
-                                <p className="text-[10px] text-slate-500 uppercase tracking-widest truncate">Lead Credit Analyst</p>
-                            </div>
-                        </div>
-                    </div>
-                </aside>
-
-                {/* ═══════════════════════════════════════════════════════════════ */}
-                {/* MAIN CONTENT                                                   */}
-                {/* ═══════════════════════════════════════════════════════════════ */}
-                <main className="flex-1 flex flex-col min-w-0">
-
-                    {/* Header */}
-                    <header className="h-16 border-b border-primary/10 bg-background-light/50 dark:bg-background-dark/50 backdrop-blur-md flex items-center justify-between px-8 shrink-0">
-                        <div className="flex items-center flex-1 max-w-xl">
-                            <div className="relative w-full">
-                                <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-lg">search</span>
-                                <input
-                                    className="w-full bg-primary/5 border border-primary/10 rounded-lg pl-10 pr-4 py-2 text-sm focus:ring-1 focus:ring-primary focus:border-primary focus:outline-none"
-                                    placeholder="Search entities, GSTIN, or PAN..."
-                                    type="text"
-                                />
-                            </div>
-                        </div>
-                        <div className="flex items-center gap-4">
-                            <button className="p-2 text-slate-400 hover:text-primary transition-colors relative">
+                    <div className="flex items-center gap-4 relative">
+                        {/* Notifications */}
+                        <div className="relative" onClick={e => e.stopPropagation()}>
+                            <button
+                                onClick={(e) => { e.stopPropagation(); closeAllDropdowns(); setIsNotificationsOpen(!isNotificationsOpen) }}
+                                className={`p-2 transition-colors relative rounded-full ${isNotificationsOpen ? 'bg-primary/10 text-primary' : 'text-slate-400 hover:bg-primary/5 hover:text-primary'}`}
+                            >
                                 <span className="material-symbols-outlined">notifications</span>
-                                {app.ingestedDocs.length > 0 && <span className="absolute top-2 right-2 flex h-2 w-2 rounded-full bg-risk-high"></span>}
+                                {(app.ingestedDocs.length > 0 || app.researchInsights.length > 0) && <span className="absolute top-2 right-2 flex h-2 w-2 rounded-full bg-risk-high animate-pulse"></span>}
                             </button>
-                            <button className="p-2 text-slate-400 hover:text-primary transition-colors">
+
+                            {isNotificationsOpen && (
+                                <div className="absolute top-full right-0 mt-2 w-80 bg-background-light dark:bg-slate-800 border border-primary/20 rounded-lg shadow-xl overflow-hidden z-50">
+                                    <div className="p-3 border-b border-primary/10 bg-primary/5 flex justify-between items-center">
+                                        <p className="text-xs font-bold text-primary uppercase tracking-wider">Activity Feed</p>
+                                        <span className="text-xs text-slate-500">{app.ingestedDocs.length + app.researchInsights.length} Total</span>
+                                    </div>
+                                    <div className="max-h-96 overflow-y-auto">
+                                        {app.ingestedDocs.length === 0 && app.researchInsights.length === 0 && (
+                                            <div className="p-6 text-center text-slate-500 text-sm italic">No recent activity. Upload documents or run research.</div>
+                                        )}
+
+                                        {app.ingestedDocs.map((doc, i) => (
+                                            <div key={`doc-${i}`} className="px-4 py-3 border-b border-primary/5 hover:bg-primary/5 flex gap-3 items-start">
+                                                <div className="size-8 rounded-full bg-blue-500/10 text-blue-500 flex items-center justify-center shrink-0">
+                                                    <span className="material-symbols-outlined text-sm">description</span>
+                                                </div>
+                                                <div>
+                                                    <p className="text-sm font-medium">Document Source Parsed</p>
+                                                    <p className="text-xs text-slate-500 mt-0.5"><span className="font-mono">{doc.filename}</span> categorized as <span className="font-semibold text-primary">{doc.doc_type}</span>.</p>
+                                                    <p className="text-[10px] text-slate-400 mt-1">{new Date(doc.timestamp).toLocaleString()}</p>
+                                                </div>
+                                            </div>
+                                        ))}
+
+                                        {app.researchInsights.slice(0, 5).map((insight, i) => (
+                                            <div key={`res-${i}`} className="px-4 py-3 border-b border-primary/5 hover:bg-primary/5 flex gap-3 items-start">
+                                                <div className="size-8 rounded-full bg-purple-500/10 text-purple-500 flex items-center justify-center shrink-0">
+                                                    <span className="material-symbols-outlined text-sm">travel_explore</span>
+                                                </div>
+                                                <div>
+                                                    <p className="text-sm font-medium">{insight.title}</p>
+                                                    <p className="text-xs text-slate-500 mt-0.5 truncate max-w-[200px]">{insight.source}</p>
+                                                    <span className={`inline-block mt-1 text-[10px] px-2 py-0.5 rounded-full border ${insight.sentiment === 'negative' ? 'bg-risk-high/10 text-risk-high border-risk-high/20' : insight.sentiment === 'positive' ? 'bg-risk-low/10 text-risk-low border-risk-low/20' : 'bg-slate-100 dark:bg-slate-700 text-slate-500 border-slate-200 dark:border-slate-600'}`}>{insight.sentiment.toUpperCase()}</span>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Settings */}
+                        <div className="relative" onClick={e => e.stopPropagation()}>
+                            <button
+                                onClick={(e) => { e.stopPropagation(); closeAllDropdowns(); setIsSettingsOpen(!isSettingsOpen) }}
+                                className={`p-2 transition-colors relative rounded-full ${isSettingsOpen ? 'bg-primary/10 text-primary' : 'text-slate-400 hover:bg-primary/5 hover:text-primary'}`}
+                            >
                                 <span className="material-symbols-outlined">settings</span>
                             </button>
-                            <div className="h-6 w-px bg-primary/20"></div>
-                            <button
-                                onClick={() => { setActiveSidebarItem('risk'); setCurrentView('risk'); }}
-                                className="flex h-9 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-bold text-background-dark hover:bg-primary/90 transition-colors"
-                            >
-                                <span className="material-symbols-outlined text-lg">psychology</span>
-                                Research Agent
-                            </button>
-                        </div>
-                    </header>
 
-                    {/* View Switcher */}
-                    {currentView === 'dashboard' && <DashboardView onNavigate={(v: ViewType) => { setCurrentView(v); setActiveSidebarItem(v); }} />}
-                    {currentView === 'appraisal' && <AppraisalMemoView />}
-                    {currentView === 'gst' && <GSTReconciliationView />}
-                    {currentView === 'entity' && <EntityIngestionView />}
-                    {currentView === 'risk' && <RiskIntelligenceView />}
-                    {currentView === 'fivecs' && <FiveCsAnalysisView />}
-                </main>
-            </div>
+                            {isSettingsOpen && (
+                                <div className="absolute top-full right-0 mt-2 w-64 bg-background-light dark:bg-slate-800 border border-primary/20 rounded-lg shadow-xl overflow-hidden z-50">
+                                    <div className="p-3 border-b border-primary/10 bg-primary/5">
+                                        <p className="text-xs font-bold text-primary uppercase tracking-wider">System Settings</p>
+                                    </div>
+                                    <div className="p-2">
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); app.toggleTheme() }}
+                                            className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-primary/5 rounded-lg text-sm font-medium"
+                                        >
+                                            <div className="flex items-center gap-3 text-slate-700 dark:text-slate-300">
+                                                <span className="material-symbols-outlined">{app.theme === 'dark' ? 'light_mode' : 'dark_mode'}</span>
+                                                {app.theme === 'dark' ? 'Light Mode' : 'Dark Mode'}
+                                            </div>
+                                            <div className={`w-8 h-4 rounded-full flex items-center p-0.5 transition-colors ${app.theme === 'dark' ? 'bg-primary' : 'bg-slate-300 dark:bg-slate-600'}`}>
+                                                <div className={`w-3 h-3 rounded-full bg-white transition-transform ${app.theme === 'dark' ? 'translate-x-4' : 'translate-x-0'}`}></div>
+                                            </div>
+                                        </button>
+
+                                        <div className="h-px bg-primary/10 my-1"></div>
+
+                                        <div className="px-3 py-2.5">
+                                            <p className="text-xs text-slate-500 font-medium mb-2">Engines</p>
+                                            <div className="flex items-center justify-between text-xs my-1">
+                                                <span className="text-slate-500">Document Parser</span>
+                                                <span className="font-mono text-primary font-bold bg-primary/10 px-1.5 py-0.5 rounded">Gemini 1.5</span>
+                                            </div>
+                                            <div className="flex items-center justify-between text-xs my-1">
+                                                <span className="text-slate-500">Local Policy</span>
+                                                <span className="font-mono text-emerald-600 font-bold bg-emerald-500/10 px-1.5 py-0.5 rounded">Nashee v2</span>
+                                            </div>
+                                            <div className="flex items-center justify-between text-xs my-1">
+                                                <span className="text-slate-500">CAM Generator</span>
+                                                <span className="font-mono text-primary font-bold bg-primary/10 px-1.5 py-0.5 rounded">GPT-4</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="h-6 w-px bg-primary/20 mx-2"></div>
+                        <button
+                            onClick={() => { setActiveSidebarItem('risk'); setCurrentView('risk'); }}
+                            className="flex h-9 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-bold text-background-dark hover:bg-primary/90 transition-colors"
+                        >
+                            <span className="material-symbols-outlined text-lg">psychology</span>
+                            Research Agent
+                        </button>
+                    </div>
+                </header>
+
+                {/* View Switcher */}
+                {currentView === 'dashboard' && <DashboardView onNavigate={(v: ViewType) => { setCurrentView(v); setActiveSidebarItem(v); }} />}
+                {currentView === 'appraisal' && <AppraisalMemoView />}
+                {currentView === 'gst' && <GSTReconciliationView />}
+                {currentView === 'entity' && <EntityIngestionView />}
+                {currentView === 'risk' && <RiskIntelligenceView />}
+                {currentView === 'fivecs' && <FiveCsAnalysisView />}
+            </main>
         </div>
     )
 }
@@ -176,6 +322,13 @@ function DashboardView({ onNavigate }: { onNavigate: (v: ViewType) => void }) {
                         className="px-4 py-2 bg-primary text-background-dark rounded-lg text-sm font-bold hover:bg-primary/90 transition-colors disabled:opacity-50"
                     >
                         {app.isLoading.cam ? 'Generating...' : hasCam ? 'View CAM' : 'Generate CAM'}
+                    </button>
+                    <button
+                        onClick={app.fetchNasheeModules}
+                        disabled={app.isLoading.nashee || !app.sessionId}
+                        className="px-4 py-2 bg-amber-500 text-background-dark rounded-lg text-sm font-bold hover:bg-amber-600 transition-colors disabled:opacity-50"
+                    >
+                        {app.isLoading.nashee ? 'Running Nashee...' : 'Run Nashee Models'}
                     </button>
                 </div>
             </div>
@@ -251,6 +404,7 @@ function DashboardView({ onNavigate }: { onNavigate: (v: ViewType) => void }) {
                             {[
                                 { label: 'Documents Ingested', pct: Math.min(docsCount * 33, 100), status: `${docsCount} files processed` },
                                 { label: 'Research Insights', pct: insightsCount > 0 ? 100 : 0, status: `${insightsCount} insights gathered` },
+                                { label: 'Nashee Analytics', pct: app.localRiskDecision ? 100 : 0, status: app.localRiskDecision ? 'Models Processed' : 'Pending' },
                                 { label: 'CAM Report', pct: hasCam ? 100 : 0, status: hasCam ? 'Generated' : 'Pending Generation' },
                             ].map((item) => (
                                 <div key={item.label}>
@@ -312,6 +466,7 @@ function DashboardView({ onNavigate }: { onNavigate: (v: ViewType) => void }) {
                                 { icon: 'upload_file', label: 'Upload Documents', action: () => onNavigate('entity'), primary: !app.sessionId },
                                 { icon: 'search', label: 'Run Research Agent', action: () => onNavigate('risk'), primary: docsCount > 0 && insightsCount === 0 },
                                 { icon: 'analytics', label: 'Compute Five Cs', action: () => onNavigate('fivecs'), primary: false },
+                                { icon: 'settings_suggest', label: 'Run Nashee Models', action: app.fetchNasheeModules, primary: docsCount > 0 && !app.localRiskDecision },
                                 { icon: 'picture_as_pdf', label: 'Generate CAM PDF', action: async () => { await app.generateCAM(); onNavigate('appraisal'); }, primary: insightsCount > 0 && !hasCam },
                             ].map((action) => (
                                 <button
@@ -442,7 +597,7 @@ function AppraisalMemoView() {
 
             <div className="flex flex-1 overflow-hidden">
 
-                <div className="flex-1 overflow-y-auto bg-zinc-900/50 p-8 scroll-smooth">
+                <div className="flex-1 overflow-y-auto bg-zinc-100/50 dark:bg-zinc-900/50 p-8 scroll-smooth">
                     <div className="max-w-4xl mx-auto flex flex-col gap-6">
                         <div className="flex flex-col gap-2">
                             <div className="flex items-center gap-2 text-xs text-primary/60 uppercase font-bold tracking-widest">
@@ -748,7 +903,7 @@ function GSTReconciliationView() {
                         <h2 className="text-xl font-bold mb-6">GST Reconciliation Ledger</h2>
                         <div className="flex-1 overflow-auto border border-primary/20 rounded-xl bg-white dark:bg-background-dark/20">
                             <table className="w-full text-left border-collapse min-w-[900px]">
-                                <thead className="sticky top-0 bg-background-dark z-20 shadow-sm">
+                                <thead className="sticky top-0 bg-background-light dark:bg-background-dark z-20 shadow-sm">
                                     <tr>
                                         <th className="p-4 text-[10px] uppercase font-bold text-primary/50 tracking-widest border-b border-primary/20">Metric</th>
                                         <th className="p-4 text-[10px] uppercase font-bold text-primary/50 tracking-widest border-b border-primary/20">Declared / Filed</th>

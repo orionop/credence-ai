@@ -1,7 +1,6 @@
 import logging
 import json
 from datetime import datetime
-from langchain_openai import ChatOpenAI
 from langchain_core.prompts import PromptTemplate
 from langchain_core.messages import HumanMessage
 import os
@@ -11,8 +10,15 @@ load_dotenv()
 
 logger = logging.getLogger(__name__)
 
-# Initialize LLM
-llm = ChatOpenAI(model="gpt-4-turbo-preview", temperature=0.2)
+# Lazy-init LLM to avoid import-time pydantic errors
+_llm = None
+
+def _get_llm():
+    global _llm
+    if _llm is None:
+        from langchain_openai import ChatOpenAI
+        _llm = ChatOpenAI(model="gpt-4-turbo-preview", temperature=0.2)
+    return _llm
 
 CAM_PROMPT = """
 You are an expert Credit Manager at a top-tier Indian Corporate Bank (e.g., HDFC, ICICI, Kotak).
@@ -85,7 +91,7 @@ def generate_cam(
             primary_insights=primary_insights if primary_insights else "None provided."
         )
         
-        response = llm.invoke([HumanMessage(content=formatted_prompt)])
+        response = _get_llm().invoke([HumanMessage(content=formatted_prompt)])
         return response.content
         
     except Exception as e:

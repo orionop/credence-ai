@@ -53,19 +53,25 @@ export default function RiskIntelligenceView() {
             <div className="flex flex-1 overflow-hidden">
                 {/* Main: Graph Visualization */}
                 <main className="flex-1 flex flex-col overflow-hidden relative">
-                    <div className="relative flex-1 bg-[#12110e] overflow-hidden">
-                        {/* Abstract Graph Elements */}
-                        <div className="absolute inset-0 opacity-40">
-                            <div className="absolute top-1/4 left-1/3 w-2 h-2 rounded-full bg-red-600 graph-glow-crimson"></div>
-                            <div className="absolute top-1/4 left-1/3 w-32 h-[2px] bg-red-600/40 rotate-12"></div>
-                            <div className="absolute top-[30%] left-[45%] w-4 h-4 rounded-full border-2 border-amber-500 graph-glow-amber"></div>
-                            <div className="absolute top-[30%] left-[45%] w-24 h-[2px] bg-amber-500/30 -rotate-45"></div>
-                            <div className="absolute top-[55%] left-[40%]">
-                                <div className="relative w-40 h-40 rounded-full border border-amber-500/40 border-dashed"></div>
-                                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-2 h-2 bg-amber-500 rounded-full"></div>
-                                <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-2 h-2 bg-amber-500 rounded-full"></div>
+                    <div className="relative flex-1 bg-zinc-100 dark:bg-[#12110e] overflow-hidden">
+                        {/* Abstract Graph Elements or Real Graph */}
+                        {app.graphAnalysis && app.graphAnalysis.visualization_base64 ? (
+                            <div className="absolute inset-0 p-8 flex flex-col items-center justify-center bg-black/50">
+                                <img src={`data:image/png;base64,${app.graphAnalysis.visualization_base64}`} alt="Transaction Graph" className="w-full h-full object-contain rounded-xl mix-blend-screen opacity-80" />
                             </div>
-                        </div>
+                        ) : (
+                            <div className="absolute inset-0 opacity-40">
+                                <div className="absolute top-1/4 left-1/3 w-2 h-2 rounded-full bg-red-600 graph-glow-crimson"></div>
+                                <div className="absolute top-1/4 left-1/3 w-32 h-[2px] bg-red-600/40 rotate-12"></div>
+                                <div className="absolute top-[30%] left-[45%] w-4 h-4 rounded-full border-2 border-amber-500 graph-glow-amber"></div>
+                                <div className="absolute top-[30%] left-[45%] w-24 h-[2px] bg-amber-500/30 -rotate-45"></div>
+                                <div className="absolute top-[55%] left-[40%]">
+                                    <div className="relative w-40 h-40 rounded-full border border-amber-500/40 border-dashed"></div>
+                                    <div className="absolute top-0 left-1/2 -translate-x-1/2 w-2 h-2 bg-amber-500 rounded-full"></div>
+                                    <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-2 h-2 bg-amber-500 rounded-full"></div>
+                                </div>
+                            </div>
+                        )}
 
                         {/* Filters overlay */}
                         {insights.length > 0 && (
@@ -81,14 +87,22 @@ export default function RiskIntelligenceView() {
                         {/* Status Bar */}
                         <div className="absolute bottom-4 left-4 bg-background-dark/80 backdrop-blur px-4 py-2 rounded-full border border-primary/20 text-xs flex items-center gap-3">
                             <span className={`flex h-2 w-2 rounded-full ${insights.length > 0 ? 'bg-emerald-500' : 'bg-slate-500'}`}></span>
-                            <span className="text-slate-400">Entity: <strong className="text-slate-100">{app.entityName || 'Not configured'}</strong></span>
+                            <span className="text-slate-400">Entity: <strong className="text-slate-900 dark:text-slate-100">{app.entityName || 'Not configured'}</strong></span>
                             <span className="text-slate-600">|</span>
-                            <span className="text-slate-400">Insights: <strong className="text-slate-100">{insights.length}</strong></span>
+                            <span className="text-slate-400">Insights: <strong className="text-slate-900 dark:text-slate-100">{insights.length}</strong></span>
+                            {app.graphAnalysis && (
+                                <>
+                                    <span className="text-slate-600">|</span>
+                                    <span className="text-slate-400">Nodes: <strong className="text-slate-900 dark:text-slate-100">{app.graphAnalysis.nodes?.length || 0}</strong></span>
+                                    <span className="text-slate-600">|</span>
+                                    <span className="text-slate-400">Risk Cycles: <strong className="text-slate-900 dark:text-slate-100">{app.graphAnalysis.cycle_count || 0}</strong></span>
+                                </>
+                            )}
                         </div>
                     </div>
 
                     {/* Bottom Console: Market & Legal Intel */}
-                    <div className="h-1/3 border-t border-primary/20 bg-background-dark flex flex-col shrink-0">
+                    <div className="h-1/3 border-t border-primary/20 bg-background-light dark:bg-background-dark flex flex-col shrink-0">
                         <div className="flex items-center justify-between px-6 py-3 border-b border-primary/10 bg-primary/5">
                             <div className="flex items-center gap-3">
                                 <span className="material-symbols-outlined text-primary">news</span>
@@ -127,7 +141,7 @@ export default function RiskIntelligenceView() {
                                                     <span>Sentiment</span>
                                                     <span className="text-primary">{insight.sentiment}</span>
                                                 </div>
-                                                <div className="h-1 w-full bg-slate-800 rounded-full">
+                                                <div className="h-1 w-full bg-slate-200 dark:bg-slate-800 rounded-full">
                                                     <div className="h-full bg-primary rounded-full" style={{ width: '50%' }}></div>
                                                 </div>
                                             </div>
@@ -144,7 +158,7 @@ export default function RiskIntelligenceView() {
                 <aside className="w-80 border-l border-primary/20 bg-background-light dark:bg-background-dark flex flex-col shrink-0">
                     <div className="p-4 border-b border-primary/10">
                         <div className="flex items-center justify-between mb-4">
-                            <h3 className="font-bold text-slate-100">Research Summary</h3>
+                            <h3 className="font-bold text-slate-900 dark:text-slate-100">Research Summary</h3>
                             <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${insights.length > 0 ? 'bg-primary text-background-dark' : 'bg-slate-700 text-slate-400'}`}>
                                 {insights.length} Found
                             </span>
@@ -154,7 +168,7 @@ export default function RiskIntelligenceView() {
                                 <p className="text-[10px] text-amber-500 font-bold uppercase mb-1 flex items-center gap-1">
                                     <span className="material-symbols-outlined text-xs">warning</span> Key Finding
                                 </p>
-                                <p className="text-xs font-bold text-slate-200">{insights[0]?.title}</p>
+                                <p className="text-xs font-bold text-slate-900 dark:text-slate-200">{insights[0]?.title}</p>
                                 <p className="text-[10px] text-slate-400 mt-1 line-clamp-2">{insights[0]?.content}</p>
                             </div>
                         )}
@@ -163,7 +177,7 @@ export default function RiskIntelligenceView() {
                     <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
                         {insights.map((insight, i) => (
                             <div key={i} className="p-3 bg-primary/5 rounded-lg border border-primary/10">
-                                <p className="text-xs font-bold text-slate-200 mb-1">{insight.title}</p>
+                                <p className="text-xs font-bold text-slate-900 dark:text-slate-200 mb-1">{insight.title}</p>
                                 <p className="text-[10px] text-slate-400 line-clamp-3">{insight.content}</p>
                             </div>
                         ))}
@@ -189,7 +203,7 @@ export default function RiskIntelligenceView() {
                                 >
                                     {app.isLoading.research ? 'Scanning...' : 'Deep Scan'}
                                 </button>
-                                <button className="flex-1 bg-slate-800 text-slate-400 text-[10px] font-bold py-1.5 rounded hover:text-white">
+                                <button className="flex-1 bg-slate-200 dark:bg-slate-800 text-slate-500 dark:text-slate-400 text-[10px] font-bold py-1.5 rounded hover:text-slate-900 dark:hover:text-white">
                                     Dismiss
                                 </button>
                             </div>

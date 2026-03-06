@@ -35,12 +35,15 @@ Thumbs.db
 
 # ── Stitch / Gemini ──────────────────────────────────────────────────────────
 .gemini/
+.claude/
 stitch_*/
 retail_scoring_frontend/
 notebooks/
+
+# ── Reference / Upstream ─────────────────────────────────────────────────────
+reference/
 
 # ── Local Storage & Databases ────────────────────────────────────────────────
 backend/storage/
 *.db
 *.sqlite
-
